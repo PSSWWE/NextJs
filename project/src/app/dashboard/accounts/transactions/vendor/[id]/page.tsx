@@ -133,9 +133,9 @@ export default function VendorTransactionsPage() {
           if (sortOrder === "desc") {
             // For descending date view, show the lowest balance first on that date
             // so reading top → bottom gives a natural progression.
-            return b.newBalance - a.newBalance;
-          } else {
             return a.newBalance - b.newBalance;
+          } else {
+            return b.newBalance - a.newBalance;
           }
         }
         
