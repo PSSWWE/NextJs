@@ -459,15 +459,15 @@ export async function GET(
     });
 
     // Sort by voucher date (not createdAt) for balance calculation
-    // When dates are the same, DEBIT (shipment/invoice) transactions come before CREDIT (payment) transactions
+    // Use the same same-date ordering as the UI (CREDIT/payment before DEBIT/shipment)
     transactionsWithVoucherDates.sort((a, b) => {
-      const dateDiff = a.voucherDate.getTime() - b.voucherDate.getTime();
+      const dateDiff = a.voucherDate.getTime() - b.voucherDate.getTime(); // oldest -> newest
       if (dateDiff !== 0) {
         return dateDiff;
       }
-      // Same date: DEBIT (shipment/invoice) before CREDIT (payment)
-      if (a.type === "DEBIT" && b.type === "CREDIT") return -1;
-      if (a.type === "CREDIT" && b.type === "DEBIT") return 1;
+      // Same date: CREDIT (payment) before DEBIT (shipment/invoice)
+      if (a.type === "DEBIT" && b.type === "CREDIT") return 1;
+      if (a.type === "CREDIT" && b.type === "DEBIT") return -1;
       return 0;
     });
 
