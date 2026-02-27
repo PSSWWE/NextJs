@@ -122,11 +122,21 @@ export default function VendorTransactionsPage() {
         const dateB = new Date(getVoucherDate(b)).getTime();
         const dateDiff = sortOrder === "desc" ? dateB - dateA : dateA - dateB;
         
-        // When dates are the same, CREDIT (payment) transactions come after DEBIT (shipment/invoice) transactions
-        // Since balance is calculated from bottom to top, payments should appear above shipments in the list
+        // Same voucher date
         if (dateDiff === 0) {
-          if (a.type === "DEBIT" && b.type === "CREDIT") return 1;  // DEBIT comes after (below) CREDIT
-          if (a.type === "CREDIT" && b.type === "DEBIT") return -1; // CREDIT comes before (above) DEBIT
+          // 1) CREDIT (payment) rows should appear above DEBIT (shipment) rows
+          if (a.type === "DEBIT" && b.type === "CREDIT") return 1;
+          if (a.type === "CREDIT" && b.type === "DEBIT") return -1;
+
+          // 2) If same type, order by balance so that within the same date
+          //    the balances progress in the same direction as shown in the UI.
+          if (sortOrder === "desc") {
+            // For descending date view, show the lowest balance first on that date
+            // so reading top → bottom gives a natural progression.
+            return b.newBalance - a.newBalance;
+          } else {
+            return a.newBalance - b.newBalance;
+          }
         }
         
         return dateDiff;
