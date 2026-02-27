@@ -151,7 +151,27 @@ export default function EditInvoicePage() {
       const response = await fetch(`/api/accounts/invoices/${params.id}/edit?invID=${invID}`);
       if (response.ok) {
         const data = await response.json();
-        setInvoiceData(data);
+
+        // Ensure referenceNumber is populated from shipment if available
+        const mergedData: InvoiceData = {
+          ...data,
+          referenceNumber:
+            data.shipment?.referenceNumber ??
+            data.referenceNumber ??
+            "",
+          shipment: data.shipment
+            ? {
+                ...data.shipment,
+                referenceNumber:
+                  data.shipment.referenceNumber ??
+                  data.referenceNumber ??
+                  data.shipment.referenceNumber ??
+                  "",
+              }
+            : data.shipment,
+        };
+
+        setInvoiceData(mergedData);
         
         // Parse calculated values first
         let parsedValues: any = {};

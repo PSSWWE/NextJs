@@ -945,8 +945,14 @@ export default function CustomerTransactionsPage() {
       const debit = transaction.type === "DEBIT" ? (transaction.amount ?? 0).toLocaleString() : "-";
       const credit = transaction.type === "CREDIT" ? (transaction.amount ?? 0).toLocaleString() : "-";
       
+      // Build description with consignee for DEBIT rows
+      const baseDescription =
+        transaction.type === "DEBIT" && transaction.consigneeName
+          ? `Consignee: ${transaction.consigneeName} | ${transaction.description}`
+          : transaction.description;
+
       // Make pipe characters bold in description
-      const descriptionWithBoldPipes = transaction.description.replace(/\|/g, '<b>|</b>');
+      const descriptionWithBoldPipes = baseDescription.replace(/\|/g, '<b>|</b>');
       
       // Format balance: show "-" if balance is 0, otherwise show inverted balance
       const balance = transaction.newBalance ?? 0;
@@ -954,7 +960,7 @@ export default function CustomerTransactionsPage() {
       
       return [
         formattedDate,
-        transaction.invoice || "-",
+        transaction.type === "CREDIT" ? "-" : transaction.invoice || "-",
         descriptionWithBoldPipes,
         transaction.reference || "-",
         debit,
@@ -1409,7 +1415,7 @@ export default function CustomerTransactionsPage() {
                       </td>
                       <td className="px-4 py-3">
                         {transaction.type === "DEBIT" && transaction.consigneeName
-                          ? `${transaction.description} | ${transaction.consigneeName}`
+                          ? `Consignee Name: ${transaction.consigneeName} | ${transaction.description}`
                           : transaction.description}
                       </td>
                       <td className="px-4 py-3">{transaction.reference || "-"}</td>

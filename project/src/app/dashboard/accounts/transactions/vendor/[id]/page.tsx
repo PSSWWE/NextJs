@@ -943,8 +943,14 @@ export default function VendorTransactionsPage() {
         formattedDate = `${day}/${month}/${year}`;
       }
       
+      // Build description with consignee for DEBIT rows
+      const baseDescription =
+        transaction.type === "DEBIT" && transaction.consigneeName
+          ? `Consignee: ${transaction.consigneeName} | ${transaction.description}`
+          : transaction.description;
+
       // Make pipe characters bold in description
-      const descriptionWithBoldPipes = transaction.description.replace(/\|/g, '<b>|</b>');
+      const descriptionWithBoldPipes = baseDescription.replace(/\|/g, '<b>|</b>');
       
       // Format balance: show "-" if balance is 0, otherwise show inverted balance
       const balance = transaction.newBalance ?? 0;
@@ -952,11 +958,15 @@ export default function VendorTransactionsPage() {
       
       return [
         formattedDate,
-        transaction.type,
-        `${(transaction.amount ?? 0).toLocaleString()}`,
+        transaction.type === "CREDIT" ? "-" : transaction.invoice || "N/A",
         descriptionWithBoldPipes,
         transaction.reference || "N/A",
-        transaction.invoice || "N/A",
+        transaction.type === "DEBIT"
+          ? (transaction.amount ?? 0).toLocaleString()
+          : "-",
+        transaction.type === "CREDIT"
+          ? (transaction.amount ?? 0).toLocaleString()
+          : "-",
         formattedBalance
       ];
     });
@@ -1407,7 +1417,7 @@ export default function VendorTransactionsPage() {
                       </td>
                       <td className="px-4 py-3">
                         {transaction.type === "DEBIT" && transaction.consigneeName
-                          ? `${transaction.description} | ${transaction.consigneeName}`
+                          ? `Consignee Name: ${transaction.consigneeName} | ${transaction.description}`
                           : transaction.description}
                       </td>
                       <td className="px-4 py-3">{transaction.reference || "-"}</td>

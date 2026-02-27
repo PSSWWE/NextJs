@@ -121,16 +121,6 @@ const Navbar = ({
           <span className="text-sm font-medium">Tracking</span>
         </Link>
 
-        {/* Bulk Upload Shipments */}
-        <button
-          onClick={() => setShowBulkUpload(true)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200 bg-linear-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700"
-          title="Bulk Upload Shipments"
-        >
-          <Upload className="w-5 h-5" />
-          <span className="text-sm font-medium">Bulk Upload</span>
-        </button>
-
         {/* Remote Area Lookup */}
         <Link
           href="/dashboard/remote-area-lookup"
@@ -172,10 +162,10 @@ const Navbar = ({
         <ThemeToggle />
       </div>
 
-      {/* Bulk Upload Modal */}
-      <BulkUploadModal 
-        isOpen={showBulkUpload} 
-        onClose={() => setShowBulkUpload(false)} 
+      {/* Bulk Upload Modal (triggered elsewhere, kept mounted for now) */}
+      <BulkUploadModal
+        isOpen={showBulkUpload}
+        onClose={() => setShowBulkUpload(false)}
       />
     </header>
   );

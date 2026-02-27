@@ -25,6 +25,8 @@ import {
   FaFileInvoice,
   FaTrash,
 } from "react-icons/fa";
+import BulkUploadModal from "@/components/BulkUploadModal";
+import { Upload } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Country, State } from "country-state-city";
 
@@ -78,6 +80,7 @@ const AddShipmentPage = () => {
   const [senderDropdownOpen, setSenderDropdownOpen] = useState(false);
   const [recipientDropdownOpen, setRecipientDropdownOpen] = useState(false);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [formResetKey, setFormResetKey] = useState(0);
 
   // State for packages/boxes
@@ -1160,9 +1163,21 @@ const AddShipmentPage = () => {
     <div className="w-full px-2 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 text-foreground h-[calc(100vh-64px)] overflow-y-auto">
       <form onSubmit={handleSubmit}>
         {/* Record shipment header */}
-        <div className="flex items-center gap-2 mb-4 sm:mb-6">
-          <FaBoxOpen className="text-lg sm:text-xl text-primary" />
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold">Add shipment</h1>
+        <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
+          <div className="flex items-center gap-2">
+            <FaBoxOpen className="text-lg sm:text-xl text-primary" />
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold">
+              Add shipment
+            </h1>
+          </div>
+          <Button
+            type="button"
+            onClick={() => setShowBulkUpload(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-200 bg-linear-to-r from-blue-500 to-cyan-600 text-white hover:from-blue-600 hover:to-cyan-700 text-sm font-medium"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Import shipment</span>
+          </Button>
         </div>
 
         {/* Shipment Info Section */}
@@ -2142,6 +2157,12 @@ const AddShipmentPage = () => {
           </CardContent>
         </Card>
       </form>
+
+      {/* Import shipments modal */}
+      <BulkUploadModal
+        isOpen={showBulkUpload}
+        onClose={() => setShowBulkUpload(false)}
+      />
     </div>
   );
 };
