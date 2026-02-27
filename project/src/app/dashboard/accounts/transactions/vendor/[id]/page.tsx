@@ -51,6 +51,7 @@ type Transaction = {
   shipmentDate?: string;
   paymentDate?: string;
   debitNoteDate?: string;
+  consigneeName?: string;
 };
 
 export default function VendorTransactionsPage() {
@@ -1401,8 +1402,14 @@ export default function VendorTransactionsPage() {
                           }
                         })()}
                       </td>
-                      <td className="px-4 py-3">{transaction.invoice || "-"}</td>
-                      <td className="px-4 py-3">{transaction.description}</td>
+                      <td className="px-4 py-3">
+                        {transaction.type === "CREDIT" ? "-" : transaction.invoice || "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {transaction.type === "DEBIT" && transaction.consigneeName
+                          ? `${transaction.description} | ${transaction.consigneeName}`
+                          : transaction.description}
+                      </td>
                       <td className="px-4 py-3">{transaction.reference || "-"}</td>
                       <td className="px-4 py-3 font-medium">
                         {transaction.type === "DEBIT" ? (

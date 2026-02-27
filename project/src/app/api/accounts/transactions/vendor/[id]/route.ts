@@ -201,6 +201,7 @@ export async function GET(
                 referenceNumber: true,
                 deliveryStatus: true,
                 shipmentDate: true,
+                recipientName: true,
               },
             },
           },
@@ -267,6 +268,7 @@ export async function GET(
           let shipmentDate: string | undefined = undefined;
           let paymentDate: string | undefined = undefined;
           let debitNoteDate: string | undefined = undefined;
+          let consigneeName: string | undefined = undefined;
 
           // Get debit note date from batched data
           if (transaction.reference) {
@@ -292,6 +294,10 @@ export async function GET(
               if (invoice.shipment.shipmentDate) {
                 shipmentDate = invoice.shipment.shipmentDate.toISOString();
               }
+
+              if (invoice.shipment.recipientName) {
+                consigneeName = invoice.shipment.recipientName;
+              }
             }
 
             // Get payment date from batched data
@@ -311,6 +317,7 @@ export async function GET(
             shipmentDate,
             paymentDate,
             debitNoteDate,
+            consigneeName,
           };
         }
       );
@@ -743,7 +750,8 @@ export async function GET(
               destination: true,
               referenceNumber: true,
               deliveryStatus: true,
-              shipmentDate: true
+              shipmentDate: true,
+              recipientName: true
             }
           }
         }
@@ -805,6 +813,7 @@ export async function GET(
       let shipmentDate: string | undefined = undefined;
       let paymentDate: string | undefined = undefined;
       let debitNoteDate: string | undefined = undefined;
+        let consigneeName: string | undefined = undefined;
       
       // Get debit note date from batched data
       if (transaction.reference) {
@@ -824,12 +833,16 @@ export async function GET(
             destination: invoice.shipment.destination,
             referenceNo: invoice.shipment.referenceNumber,
             status: invoice.shipment.deliveryStatus || 'Sale',
-            shipmentDate: invoice.shipment.shipmentDate
+              shipmentDate: invoice.shipment.shipmentDate
           };
           
           if (invoice.shipment.shipmentDate) {
             shipmentDate = invoice.shipment.shipmentDate.toISOString();
           }
+
+            if (invoice.shipment.recipientName) {
+              consigneeName = invoice.shipment.recipientName;
+            }
         }
         
         // Get payment date from batched data
@@ -846,7 +859,8 @@ export async function GET(
         shipmentInfo,
         shipmentDate,
         paymentDate,
-        debitNoteDate
+          debitNoteDate,
+          consigneeName
       };
     });
 
