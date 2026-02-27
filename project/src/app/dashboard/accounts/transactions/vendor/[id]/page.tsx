@@ -86,6 +86,7 @@ export default function VendorTransactionsPage() {
   const [customEndDate, setCustomEndDate] = useState("");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [loadTime, setLoadTime] = useState<number | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const isInitialMount = useRef(true);
   const isTypingDate = useRef(false);
 
@@ -137,7 +138,7 @@ export default function VendorTransactionsPage() {
 
   const totalPages = pageSize === 'all' ? 1 : Math.ceil(total / pageSize);
 
-  const fetchVendorData = async () => {
+  const fetchVendorData = async (options?: { recalc?: boolean }) => {
     // Don't fetch if custom period is selected but dates are not provided
     if (periodType === 'custom' && (!customStartDate || !customEndDate || 
         customStartDate.length !== 10 || customEndDate.length !== 10)) {
@@ -161,6 +162,10 @@ export default function VendorTransactionsPage() {
         sortOrder,
       });
 
+      if (options?.recalc) {
+        params.set('recalc', 'true');
+      }
+
       const response = await fetch(`/api/accounts/transactions/vendor/${vendorId}?${params}`);
       const data = await response.json();
       
@@ -182,6 +187,7 @@ export default function VendorTransactionsPage() {
       setLoadTime(null);
     } finally {
       setLoading(false);
+      setIsRecalculating(false);
     }
   };
 
@@ -1137,7 +1143,7 @@ export default function VendorTransactionsPage() {
           )}
         </div>
 
-        {/* Right side - Show, Export and Date Range */}
+        {/* Right side - Show, Export, Recalculate and Date Range */}
         <div className="flex gap-4 items-end">
           {/* Show Entries Dropdown */}
           <div className="flex items-center gap-2">
@@ -1189,6 +1195,21 @@ export default function VendorTransactionsPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
+
+          {/* Recalculate balances */}
+          <div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPage(1);
+                setIsRecalculating(true);
+                fetchVendorData({ recalc: true });
+              }}
+              disabled={loading || isRecalculating}
+            >
+              {isRecalculating ? 'Recalculating...' : 'Recalculate balances'}
+            </Button>
           </div>
 
           {/* Date Range Filter */}

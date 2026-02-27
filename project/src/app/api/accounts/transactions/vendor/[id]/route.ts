@@ -22,15 +22,17 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limitParam = searchParams.get('limit') || '10';
-    const limit = limitParam === 'all' ? 'all' : parseInt(limitParam);
+    const isAllLimit = limitParam === 'all';
+    const limit = isAllLimit ? undefined : parseInt(limitParam);
     const search = searchParams.get('search') || '';
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
     const sortField = searchParams.get('sortField') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const recalcBalances = searchParams.get('recalc') === 'true';
 
     // Calculate skip for pagination
-    const skip = limit === 'all' ? 0 : (page - 1) * limit;
+    const skip = isAllLimit || !limit ? 0 : (page - 1) * limit;
 
     // Build where clause for filtering
     const whereClause: any = {
@@ -136,7 +138,206 @@ export async function GET(
       );
     }
 
-    // First, get ALL transactions for this vendor (without pagination) to recalculate balances
+    // Lightweight path: just list transactions using existing balances, no full-history recalculation
+    if (!recalcBalances) {
+      const whereForList: any = { ...whereClause };
+
+      // Apply date range on createdAt (lightweight approximation of voucher-date filtering)
+      if (fromDate || toDate) {
+        const createdAtFilter: any = {};
+        if (fromDate) {
+          createdAtFilter.gte = new Date(fromDate);
+        }
+        if (toDate) {
+          createdAtFilter.lte = new Date(toDate);
+        }
+        whereForList.createdAt = createdAtFilter;
+      }
+
+      const [transactions, total] = await Promise.all([
+        prisma.vendorTransaction.findMany({
+          where: whereForList,
+          orderBy: { [validSortField]: validSortOrder },
+          ...(isAllLimit || !limit
+            ? {}
+            : {
+                skip,
+                take: limit,
+              }),
+        }),
+        prisma.vendorTransaction.count({
+          where: whereForList,
+        }),
+      ]);
+
+      const orderedTransactions = transactions;
+
+      // Batch fetch shipment information and payment dates for paginated transactions
+      const paginatedInvoiceNumbers = orderedTransactions
+        .filter((t) => t.invoice)
+        .map((t) => t.invoice!)
+        .filter((inv, index, self) => self.indexOf(inv) === index);
+
+      const paginatedDebitNoteRefs = orderedTransactions
+        .filter(
+          (t) =>
+            t.reference?.startsWith("#DEBIT") ||
+            t.reference?.startsWith("#CREDIT")
+        )
+        .map((t) => t.reference!)
+        .filter((ref, index, self) => self.indexOf(ref) === index);
+
+      // Batch fetch invoices with full shipment info
+      const paginatedInvoicesMap = new Map<string, any>();
+      if (paginatedInvoiceNumbers.length > 0) {
+        const paginatedInvoices = await prisma.invoice.findMany({
+          where: { invoiceNumber: { in: paginatedInvoiceNumbers } },
+          include: {
+            shipment: {
+              select: {
+                trackingId: true,
+                weight: true,
+                destination: true,
+                referenceNumber: true,
+                deliveryStatus: true,
+                shipmentDate: true,
+              },
+            },
+          },
+        });
+        paginatedInvoices.forEach((inv) => {
+          paginatedInvoicesMap.set(inv.invoiceNumber, inv);
+        });
+      }
+
+      // Batch fetch debit notes for paginated transactions
+      const paginatedDebitNotesMap = new Map<string, Date>();
+      if (paginatedDebitNoteRefs.length > 0) {
+        const paginatedDebitNotes = await prisma.debitNote.findMany({
+          where: { debitNoteNumber: { in: paginatedDebitNoteRefs } },
+          select: { debitNoteNumber: true, date: true },
+        });
+        paginatedDebitNotes.forEach((dn) => {
+          if (dn.date) paginatedDebitNotesMap.set(dn.debitNoteNumber, dn.date);
+        });
+      }
+
+      // Batch fetch payments for CREDIT transactions in paginated results
+      const paginatedCreditInvoices = orderedTransactions
+        .filter((t) => t.type === "CREDIT" && t.invoice)
+        .map((t) => t.invoice!);
+
+      const paginatedPaymentsMap = new Map<string, Date>();
+      if (paginatedCreditInvoices.length > 0) {
+        const uniquePaginatedInvoices = [...new Set(paginatedCreditInvoices)];
+        const paginatedPayments = await prisma.payment.findMany({
+          where: {
+            invoice: { in: uniquePaginatedInvoices },
+            toVendorId: vendorId,
+            transactionType: "EXPENSE",
+          },
+          select: {
+            invoice: true,
+            date: true,
+          },
+          orderBy: { date: "desc" },
+        });
+
+        // Group by invoice and take the most recent payment for each
+        const paymentsByInvoice = new Map<string, Date>();
+        paginatedPayments.forEach((p) => {
+          if (
+            p.date &&
+            p.invoice &&
+            (!paymentsByInvoice.has(p.invoice) ||
+              paymentsByInvoice.get(p.invoice)! < p.date)
+          ) {
+            paymentsByInvoice.set(p.invoice, p.date);
+          }
+        });
+        paymentsByInvoice.forEach((date, invoice) => {
+          paginatedPaymentsMap.set(invoice, date);
+        });
+      }
+
+      // Map transactions with shipment info using batched data
+      const transactionsWithShipmentInfo = orderedTransactions.map(
+        (transaction) => {
+          let shipmentInfo = null;
+          let shipmentDate: string | undefined = undefined;
+          let paymentDate: string | undefined = undefined;
+          let debitNoteDate: string | undefined = undefined;
+
+          // Get debit note date from batched data
+          if (transaction.reference) {
+            const dnDate = paginatedDebitNotesMap.get(transaction.reference);
+            if (dnDate) {
+              debitNoteDate = dnDate.toISOString();
+            }
+          }
+
+          if (transaction.invoice) {
+            const invoice = paginatedInvoicesMap.get(transaction.invoice);
+
+            if (invoice?.shipment) {
+              shipmentInfo = {
+                awbNo: invoice.shipment.trackingId,
+                weight: invoice.shipment.weight,
+                destination: invoice.shipment.destination,
+                referenceNo: invoice.shipment.referenceNumber,
+                status: invoice.shipment.deliveryStatus || "Sale",
+                shipmentDate: invoice.shipment.shipmentDate,
+              };
+
+              if (invoice.shipment.shipmentDate) {
+                shipmentDate = invoice.shipment.shipmentDate.toISOString();
+              }
+            }
+
+            // Get payment date from batched data
+            if (transaction.type === "CREDIT") {
+              const paymentDateObj = paginatedPaymentsMap.get(
+                transaction.invoice
+              );
+              if (paymentDateObj) {
+                paymentDate = paymentDateObj.toISOString();
+              }
+            }
+          }
+
+          return {
+            ...transaction,
+            shipmentInfo,
+            shipmentDate,
+            paymentDate,
+            debitNoteDate,
+          };
+        }
+      );
+
+      return NextResponse.json({
+        vendor: {
+          id: vendor.id,
+          CompanyName: vendor.CompanyName,
+          PersonName: vendor.PersonName,
+          currentBalance: vendor.currentBalance,
+          creditLimit: vendor.creditLimit,
+          Address: vendor.Address,
+          City: vendor.City,
+          Country: vendor.Country,
+        },
+        transactions: transactionsWithShipmentInfo,
+        total,
+        page,
+        limit: isAllLimit || !limit ? total : limit,
+        totalPages:
+          isAllLimit || !limit
+            ? 1
+            : Math.ceil(total / (limit || 1)),
+      });
+    }
+
+    // Heavy path: full-history recalculation, only when explicitly requested
     const allTransactions = await prisma.vendorTransaction.findMany({
       where: { vendorId: vendorId },
       orderBy: { createdAt: 'asc' }, // Sort chronologically by createdAt first
@@ -477,7 +678,7 @@ export async function GET(
     });
 
     // Apply pagination
-    const paginatedTransactionIds = limit === 'all' 
+    const paginatedTransactionIds = isAllLimit || !limit
       ? filteredTransactions.map(t => t.id)
       : filteredTransactions
           .slice(skip, skip + limit)
@@ -648,8 +849,11 @@ export async function GET(
       transactions: transactionsWithShipmentInfo,
       total,
       page,
-      limit: limit === 'all' ? total : limit,
-      totalPages: limit === 'all' ? 1 : Math.ceil(total / limit)
+      limit: isAllLimit || !limit ? total : limit,
+      totalPages:
+        isAllLimit || !limit
+          ? 1
+          : Math.ceil(total / (limit || 1))
     });
 
   } catch (error) {
