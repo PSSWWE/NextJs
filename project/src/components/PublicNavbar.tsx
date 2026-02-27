@@ -31,7 +31,8 @@ const PublicNavbar = () => {
     { href: "/auth/login", label: "Sign in" },
   ];
 
-  const NAVBAR_OFFSET = 115;
+  // Offset for smooth scrolling to sections, matching the main navbar height
+  const NAVBAR_OFFSET = 80;
 
   const handleSectionClick = (e: React.MouseEvent, href: string) => {
     if (pathname !== "/") return;
@@ -55,51 +56,6 @@ const PublicNavbar = () => {
 
   return (
     <header className="sticky top-0 z-50 w-full">
-      {/* Top Bar - transparent with black overlay tint */}
-      <div className="bg-black/60 py-2 backdrop-blur-sm">
-        <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-nowrap items-center justify-between gap-4 text-xs sm:text-sm text-white">
-            {/* Left: Phone | Email | Address */}
-            <div className="flex flex-nowrap items-center gap-0 min-w-0 overflow-hidden">
-              <a href="tel:+924235716494" className="flex items-center gap-1.5 sm:gap-2 hover:text-white/90 transition-colors shrink-0 pr-4 sm:pr-6 lg:pr-8 border-r border-white/30">
-                <FaPhone className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-white" />
-                <span className="whitespace-nowrap">+92 42 35716494</span>
-              </a>
-              <a href="mailto:info@psswwe.com" className="flex items-center gap-1.5 sm:gap-2 hover:text-white/90 transition-colors min-w-0 shrink-0 px-4 sm:px-6 lg:px-8">
-                <FaEnvelope className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-white" />
-                <span className="truncate max-w-[140px] sm:max-w-[180px] lg:max-w-none">info@psswwe.com</span>
-              </a>
-              <span className="hidden md:flex items-center gap-1.5 sm:gap-2 min-w-0 shrink pl-4 sm:pl-6 lg:pl-8 overflow-hidden">
-                <FaMapMarkerAlt className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-white" />
-                <span className="truncate max-w-[160px] lg:max-w-[220px] xl:max-w-none">LGF-44 Land Mark Plaza, Jail Road, Lahore, 54660, Pakistan</span>
-              </span>
-            </div>
-            {/* Right: Language | Social icons */}
-            <div className="flex items-center gap-0 shrink-0 border-l border-white/30 pl-4 sm:pl-6 lg:pl-8">
-              <div className="flex items-center gap-1.5 sm:gap-2 cursor-pointer hover:text-white/90 pr-4 sm:pr-6 lg:pr-8 border-r border-white/30">
-                <FaGlobe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                <span>EN</span>
-                <FaChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-              </div>
-              <div className="flex items-center gap-3 sm:gap-4 pl-4 sm:pl-6 lg:pl-8">
-                <a href="#" className="hover:text-white/90 transition-colors text-white" aria-label="YouTube">
-                  <FaYoutube className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </a>
-                <a href="#" className="hover:text-white/90 transition-colors text-white" aria-label="Instagram">
-                  <FaInstagram className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </a>
-                <a href="#" className="hover:text-white/90 transition-colors text-white" aria-label="Twitter">
-                  <FaTwitter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </a>
-                <a href="#" className="hover:text-white/90 transition-colors text-white" aria-label="Facebook">
-                  <FaFacebookF className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main Navigation Bar - white transparent overlay */}
       <div className="bg-white/50 border-b border-gray-200/50 backdrop-blur-sm">
         <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">

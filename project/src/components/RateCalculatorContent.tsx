@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Country } from "country-state-city";
+import { Plane, Shield, Info, Printer, Clock } from "lucide-react";
 
 const documentTypes = [
   "Document",
@@ -91,6 +93,7 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showFixedCharges, setShowFixedCharges] = useState(true);
+  const [publicResultsTab, setPublicResultsTab] = useState<"all" | "express">("all");
 
   useEffect(() => {
     const allCountries = Country.getAllCountries();
@@ -343,13 +346,12 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
             </div>
           )}
 
-          {results && (
+          {results && !publicView && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="mt-4 sm:mt-6 space-y-3 sm:space-y-4"
             >
-              {!publicView && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
                 {results.top3Rates.map((rate, index) => (
                   <Card 
@@ -420,7 +422,6 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
                   </Card>
                 ))}
               </div>
-              )}
 
               <Card>
                 <CardContent className="p-3 sm:p-4">
@@ -516,6 +517,120 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
                   </div>
                 </CardContent>
               </Card>
+            </motion.div>
+          )}
+
+          {results && publicView && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-4 sm:mt-6 space-y-3 sm:space-y-4"
+            >
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPublicResultsTab("all")}
+                  className={`rounded-full px-4 py-1.5 text-xs sm:text-sm font-semibold border transition-colors ${
+                    publicResultsTab === "all"
+                      ? "bg-sky-400 text-white border-sky-400 shadow-sm"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPublicResultsTab("express")}
+                  className={`rounded-full px-4 py-1.5 text-xs sm:text-sm font-semibold border transition-colors ${
+                    publicResultsTab === "express"
+                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  Express
+                </button>
+              </div>
+
+              {(() => {
+                const allRates = results.allRates || [];
+                const expressRates = allRates.filter((rate) =>
+                  /express/i.test(rate.service) ||
+                  /priority/i.test(rate.service)
+                );
+                const displayRates =
+                  publicResultsTab === "express" && expressRates.length > 0
+                    ? expressRates
+                    : allRates;
+
+                return (
+                  <div className="space-y-3 sm:space-y-4">
+                    {displayRates.map((rate, index) => {
+                      const serviceLabel =
+                        publicResultsTab === "express"
+                          ? `${rate.service} LHR`
+                          : rate.service;
+                      return (
+                        <div
+                          key={`${rate.vendor}-${rate.service}-${rate.weight}-${index}`}
+                          className="flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white shadow-sm px-4 sm:px-6 py-3 sm:py-4"
+                        >
+                          <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                            <div className="flex items-center justify-center rounded-lg bg-white border border-slate-200 px-3 py-2 shadow-sm">
+                              <span className="text-sm sm:text-base font-semibold text-slate-900">
+                                {rate.vendor || "Carrier"}
+                              </span>
+                            </div>
+                            <div className="flex flex-col">
+                              <p className="text-sm sm:text-base font-semibold text-slate-900">
+                                {serviceLabel}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] sm:text-xs text-slate-600">
+                                <span className="inline-flex items-center gap-1">
+                                  <Plane className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" />
+                                  <span>International Priority</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Info className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" />
+                                  <span>Collection at sender address</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" />
+                                  <span>Delivery 1–6 business days</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" />
+                                  <span>Printer required</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500" />
+                                  <span>Insurance options</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                            <div className="text-right">
+                              <p className="text-lg sm:text-xl font-bold text-slate-900">
+                                Rs. {rate.price.toFixed(2)}
+                              </p>
+                              <p className="text-[11px] sm:text-xs text-slate-500">
+                                {rate.weight} kg
+                              </p>
+                            </div>
+                            <Link
+                              href="/auth/login"
+                              className="inline-flex items-center justify-center rounded-full bg-sky-400 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                            >
+                              Book
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </motion.div>
           )}
         </CardContent>

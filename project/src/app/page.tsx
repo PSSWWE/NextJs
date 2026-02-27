@@ -706,7 +706,7 @@ function ContactSection() {
   return (
     <section
       id="contact"
-      className="relative text-white overflow-hidden scroll-mt-30 bg-cover bg-center bg-no-repeat"
+      className="relative text-white overflow-hidden scroll-mt-30 bg-cover bg-center bg-no-repeat min-h-[calc(100vh-80px)] flex items-stretch"
       style={{ backgroundImage: "url('/map.jpeg')" }}
     >
       {/* Black tint over background image */}
@@ -716,9 +716,9 @@ function ContactSection() {
       {/* Subtle dotted pattern */}
       <div className="absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] bg-size-[24px_24px]" aria-hidden />
 
-      <div className="relative z-10 pt-12 pb-8 w-full max-w-screen-2xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16">
+      <div className="relative z-10 pt-8 pb-6 w-full max-w-screen-2xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 flex flex-col">
         {/* Four columns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-8 mb-8">
           {/* Column 1: Logo + description */}
           <div>
             <Link href="/" className="inline-block mb-4">
@@ -790,9 +790,9 @@ function ContactSection() {
         </div>
 
         {/* Map + Contact form row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-6 border-t border-white/10">
-          {/* Map */}
-          <div className="lg:col-span-2 rounded-lg overflow-hidden bg-gray-800/50 aspect-16/10 min-h-[200px]">
+        <div className="grid grid-cols-1 lg:grid-cols-[2.1fr_0.9fr] gap-6 pt-4 border-t border-white/10 flex-1 items-start">
+          {/* Map - slightly taller but still compact */}
+          <div className="rounded-lg overflow-hidden bg-gray-800/50 h-[240px] sm:h-[400px]">
             <iframe
               title="PSS Worldwide - Land Mark Plaza, Jail Road, Lahore"
               src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3400.6058668977444!2d74.3469253!3d31.5349833!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x391905ede7407d95%3A0x3731d66c5f937a1f!2sPrompt%20Survey%20%26%20Services%20(PSS)!5e0!3m2!1sen!2s!4v1769604264555!5m2!1sen!2s"
@@ -804,29 +804,29 @@ function ContactSection() {
           </div>
 
           {/* Contact form */}
-          <div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+          <div className="max-h-[240px] sm:max-h-[400px]">
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="company" className="text-gray-300 text-sm">Company</Label>
-                  <Input id="company" name="company" value={formData.company} onChange={handleChange} placeholder="Company" className="mt-1 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
+                  <Input id="company" name="company" value={formData.company} onChange={handleChange} placeholder="Company" className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
                 </div>
                 <div>
                   <Label htmlFor="contact-name" className="text-gray-300 text-sm">Name</Label>
-                  <Input id="contact-name" name="name" value={formData.name} onChange={handleChange} placeholder="Name" required className="mt-1 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
+                  <Input id="contact-name" name="name" value={formData.name} onChange={handleChange} placeholder="Name" required className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="contact-phone" className="text-gray-300 text-sm">Phone</Label>
-                  <Input id="contact-phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} placeholder="Phone" className="mt-1 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
+                  <Input id="contact-phone" name="phone" type="tel" value={formData.phone} onChange={handleChange} placeholder="Phone" className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
                 </div>
                 <div>
                   <Label htmlFor="contact-email" className="text-gray-300 text-sm">Email</Label>
-                  <Input id="contact-email" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email" required className="mt-1 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
+                  <Input id="contact-email" name="email" type="email" value={formData.email} onChange={handleChange} placeholder="Email" required className="bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
                 </div>
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label className="text-gray-300 text-sm">Select a service</Label>
                 <Select value={formData.service} onValueChange={(v) => setFormData({ ...formData, service: v })}>
                   <SelectTrigger className="mt-1 w-full bg-gray-800/50 border-gray-600 text-white focus:ring-[#2563eb] [&>span]:text-gray-300">
@@ -841,9 +841,18 @@ function ContactSection() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="contact-message" className="text-gray-300 text-sm">Message</Label>
-                <Textarea id="contact-message" name="message" value={formData.message} onChange={handleChange} placeholder="Message" required rows={4} className="mt-1 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]" />
+                <Textarea
+                  id="contact-message"
+                  name="message"
+                  value={formData.message}
+                  onChange={handleChange}
+                  placeholder="Message"
+                  required
+                  rows={3}
+                  className="mt-1 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-500 focus-visible:ring-[#2563eb]"
+                />
               </div>
               <div className="flex items-start gap-2">
                 <Checkbox id="privacy" checked={privacyAccepted} onCheckedChange={(v) => setPrivacyAccepted(!!v)} className="border-gray-500 data-[state=checked]:bg-[#2563eb] data-[state=checked]:border-[#2563eb] mt-0.5" />

@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { Country } from "country-state-city";
 
 export async function GET(req: Request) {
-    // console.log("working");
-    
   const { searchParams } = new URL(req.url);
 
   const page = parseInt(searchParams.get("page") || "1");
@@ -14,6 +12,7 @@ export async function GET(req: Request) {
   const skip = isAll ? 0 : (page - 1) * (limit || 10);
 
   const status = searchParams.get("status") || undefined;
+  const onlyRemote = searchParams.get("onlyRemote") === "true";
   const search = searchParams.get("search")?.trim() || "";
   const sortField = searchParams.get("sortField") || "id";
   const sortOrder = searchParams.get("sortOrder") || "desc";
@@ -21,6 +20,7 @@ export async function GET(req: Request) {
   const where: any = {};
 
   if (status) where.ActiveStatus = status;
+  if (onlyRemote) where.isRemoteArea = true;
 
   // Fuzzy search across specific columns only
   if (search) {
@@ -64,13 +64,12 @@ export async function GET(req: Request) {
     findManyOptions.take = limit;
   }
 
-  const [recipients, total] = await Promise.all([
+  const [recipients, total, remoteTotal] = await Promise.all([
     prisma.recipients.findMany(findManyOptions),
     prisma.recipients.count({ where }),
+    prisma.recipients.count({ where: { ...where, isRemoteArea: true } }),
   ]);
 
 //   console.log("customers",customers);
-
-
-  return NextResponse.json({ recipients, total });
+  return NextResponse.json({ recipients, total, remoteTotal });
 }

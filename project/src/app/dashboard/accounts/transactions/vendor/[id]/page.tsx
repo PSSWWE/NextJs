@@ -1417,7 +1417,7 @@ export default function VendorTransactionsPage() {
                       </td>
                       <td className="px-4 py-3">
                         {transaction.type === "DEBIT" && transaction.consigneeName
-                          ? `Consignee Name: ${transaction.consigneeName} | ${transaction.description}`
+                          ? `Consignee: ${transaction.consigneeName} | ${transaction.description}`
                           : transaction.description}
                       </td>
                       <td className="px-4 py-3">{transaction.reference || "-"}</td>

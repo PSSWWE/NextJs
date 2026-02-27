@@ -46,6 +46,9 @@ export default function RecipientsPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [pageSize, setPageSize] = useState<number | 'all'>(10); // Default page size
+  const [activeTab, setActiveTab] = useState<"all" | "remote">("all");
+  const [remoteTotal, setRemoteTotal] = useState(0);
+  const [grandTotal, setGrandTotal] = useState(0);
 
   const totalPages = pageSize === 'all' ? 1 : Math.ceil(total / pageSize);
 
@@ -56,17 +59,27 @@ export default function RecipientsPage() {
       ...(searchTerm && { search: searchTerm }),
       sortField: sortField,
       sortOrder: sortOrder,
+      ...(activeTab === "remote" ? { onlyRemote: "true" } : {}),
     });
 
     const res = await fetch(`/api/recipients?${params}`);
-    const { recipients, total } = await res.json();
+    const { recipients, total, remoteTotal } = await res.json();
     setRecipients(recipients);
     setTotal(total);
+
+    // grandTotal should always reflect the full count of recipients (all)
+    if (activeTab === "all" && typeof total === "number") {
+      setGrandTotal(total);
+    }
+
+    if (typeof remoteTotal === "number") {
+      setRemoteTotal(remoteTotal);
+    }
   };
 
   useEffect(() => {
     fetchRecipients();
-  }, [page, searchTerm, sortField, sortOrder, pageSize]);
+  }, [page, searchTerm, sortField, sortOrder, pageSize, activeTab]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -306,11 +319,47 @@ export default function RecipientsPage() {
     <div className="p-4 sm:p-6 lg:p-8 xl:p-10 w-full bg-white dark:bg-zinc-900 transition-all duration-300 ease-in-out ml-0 lg:ml-0">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-4">
         <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-800 dark:text-white">
-          All Recipients
+          Recipients
         </h2>
-        <div className="text-right">
-          <div className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{total}</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">Total Recipients</div>
+        <div className="flex items-center gap-3 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("all");
+              setPage(1);
+            }}
+            className={`px-4 py-2 text-xs sm:text-sm font-medium rounded-md flex flex-col items-center justify-center transition-all min-w-[130px] ${
+              activeTab === "all"
+                ? "bg-blue-50 dark:bg-blue-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                : "bg-transparent text-gray-600 dark:text-gray-300 hover:bg-blue-50/60 dark:hover:bg-blue-900/20 hover:text-gray-800 dark:hover:text-gray-100"
+            }`}
+          >
+            <span className="text-lg sm:text-xl font-bold text-blue-600 dark:text-blue-300">
+              {grandTotal}
+            </span>
+            <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-300 mt-0.5">
+              All Recipients
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("remote");
+              setPage(1);
+            }}
+            className={`px-4 py-2 text-xs sm:text-sm font-medium rounded-md flex flex-col items-center justify-center transition-all min-w-[130px] ${
+              activeTab === "remote"
+                ? "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 shadow-sm"
+                : "bg-transparent text-gray-600 dark:text-gray-300 hover:bg-red-50/60 dark:hover:bg-red-900/20 hover:text-red-700 dark:hover:text-red-300"
+            }`}
+          >
+            <span className="text-lg sm:text-xl font-bold text-red-600 dark:text-red-300">
+              {remoteTotal}
+            </span>
+            <span className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-300 mt-0.5">
+              Remote Recipients
+            </span>
+          </button>
         </div>
       </div>
 
