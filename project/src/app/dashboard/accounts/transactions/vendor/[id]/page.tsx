@@ -128,14 +128,18 @@ export default function VendorTransactionsPage() {
           if (a.type === "DEBIT" && b.type === "CREDIT") return 1;
           if (a.type === "CREDIT" && b.type === "DEBIT") return -1;
 
-          // 2) If same type, order by balance so that within the same date
-          //    the balances progress in the same direction as shown in the UI.
-          if (sortOrder === "desc") {
-            // For descending date view, show the lowest balance first on that date
-            // so reading top → bottom gives a natural progression.
-            return a.newBalance - b.newBalance;
-          } else {
-            return b.newBalance - a.newBalance;
+          // 2) If same type and both have invoice numbers, order by invoice number
+          //    so that within the same date invoices are shown in descending order.
+          if (a.invoice && b.invoice) {
+            const invA = parseInt(a.invoice, 10);
+            const invB = parseInt(b.invoice, 10);
+            if (!Number.isNaN(invA) && !Number.isNaN(invB)) {
+              return sortOrder === "desc" ? invB - invA : invA - invB;
+            }
+            // Fallback string compare
+            return sortOrder === "desc"
+              ? b.invoice.localeCompare(a.invoice)
+              : a.invoice.localeCompare(b.invoice);
           }
         }
         

@@ -459,15 +459,30 @@ export async function GET(
     });
 
     // Sort by voucher date (not createdAt) for balance calculation
-    // Use the same same-date ordering as the UI (CREDIT/payment before DEBIT/shipment)
+    // For the same date:
+    // - CREDIT (payment) before DEBIT (shipment)
+    // - Within the same type, order by invoice number ascending so that the
+    //   highest invoice ends up last for that date (and therefore gets the
+    //   final balance for that date, which the UI then shows at the top).
     transactionsWithVoucherDates.sort((a, b) => {
       const dateDiff = a.voucherDate.getTime() - b.voucherDate.getTime(); // oldest -> newest
       if (dateDiff !== 0) {
         return dateDiff;
       }
-      // Same date: CREDIT (payment) before DEBIT (shipment/invoice)
+      // Same date, different types
       if (a.type === "DEBIT" && b.type === "CREDIT") return 1;
       if (a.type === "CREDIT" && b.type === "DEBIT") return -1;
+
+      // Same date, same type – use invoice number ascending when available
+      if (a.invoice && b.invoice) {
+        const invA = parseInt(a.invoice, 10);
+        const invB = parseInt(b.invoice, 10);
+        if (!Number.isNaN(invA) && !Number.isNaN(invB)) {
+          return invA - invB; // lowest invoice first, highest last
+        }
+        return a.invoice.localeCompare(b.invoice);
+      }
+
       return 0;
     });
 
