@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
   // Connection pooling for Vercel
   relationMode = "prisma"
 }
@@ -522,4 +522,10 @@ model FixedCharge {
   weight      Float    // Weight in kg (0.5, 1.0, 1.5, etc.)
   fixedCharge Float    // Fixed charge amount (1500, 1550, 1600, etc.)
   createdAt   DateTime @default(now())
+}
+
+// Key/value settings (e.g. global feature flags). Survives serverless restarts.
+model AppSetting {
+  key   String @id
+  value String
 }

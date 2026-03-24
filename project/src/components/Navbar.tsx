@@ -3,9 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Cookies from "js-cookie";
+import { jwtDecode } from "jwt-decode";
 import { Menu, Bell, Maximize2, Minimize2, Search, Upload, Package } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
 import BulkUploadModal from "./BulkUploadModal";
+
+const PUBLIC_TOOLS_ADMIN_EMAIL = "mohidfaisal321@gmail.com";
+
+interface DecodedToken {
+  email?: string;
+}
 
 const Navbar = ({
   onToggleSidebar,
@@ -17,7 +25,9 @@ const Navbar = ({
   const pathname = usePathname();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [publicToolsDisabled, setPublicToolsDisabled] = useState(false);
+  // Default true to match server (public tools off until DB says otherwise)
+  const [publicToolsDisabled, setPublicToolsDisabled] = useState(true);
+  const [showPublicToolsToggle, setShowPublicToolsToggle] = useState(false);
 
   // Check if fullscreen is supported
   const isFullscreenSupported = typeof document !== 'undefined' && 
@@ -81,11 +91,27 @@ const Navbar = ({
     };
   }, []);
 
+  // Who may change the global flag (UI only; protect POST in production via API auth if needed)
+  useEffect(() => {
+    const token = Cookies.get("token");
+    if (!token) return;
+    try {
+      const decoded = jwtDecode<DecodedToken>(token);
+      const email = (decoded.email || "").trim().toLowerCase();
+      setShowPublicToolsToggle(email === PUBLIC_TOOLS_ADMIN_EMAIL.toLowerCase());
+    } catch {
+      setShowPublicToolsToggle(false);
+    }
+  }, []);
+
   // Load public tools toggle from server (global for all users)
   useEffect(() => {
     const loadFlag = async () => {
       try {
-        const res = await fetch("/api/public-tools", { cache: "no-store" });
+        const res = await fetch("/api/public-tools", {
+          cache: "no-store",
+          credentials: "include",
+        });
         if (!res.ok) return;
         const data = await res.json();
         setPublicToolsDisabled(!!data?.disabled);
@@ -96,17 +122,28 @@ const Navbar = ({
     loadFlag();
   }, []);
 
-  const handleTogglePublicTools = () => {
-    const next = !publicToolsDisabled;
+  const handleTogglePublicTools = async () => {
+    const prev = publicToolsDisabled;
+    const next = !prev;
     setPublicToolsDisabled(next);
-    // Persist globally via API
-    fetch("/api/public-tools", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ disabled: next }),
-    }).catch((e) => {
+    try {
+      const res = await fetch("/api/public-tools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ disabled: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPublicToolsDisabled(prev);
+        console.error("Failed to update public tools flag", data?.error || res.status);
+        return;
+      }
+      setPublicToolsDisabled(!!data?.disabled);
+    } catch (e) {
+      setPublicToolsDisabled(prev);
       console.error("Failed to update public tools flag", e);
-    });
+    }
   };
 
   return (
@@ -164,19 +201,20 @@ const Navbar = ({
           <span className="text-sm font-medium">Remote Area Lookup</span>
         </Link>
 
-        {/* Public tools availability toggle */}
-        <button
-          type="button"
-          onClick={handleTogglePublicTools}
-          className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors duration-200 ${
-            publicToolsDisabled
-              ? "border-red-400 text-red-600 bg-red-50"
-              : "border-emerald-400 text-emerald-700 bg-emerald-50"
-          }`}
-          title="Toggle public tools availability"
-        >
-          {publicToolsDisabled ? "Public tools OFF" : "Public tools ON"}
-        </button>
+        {showPublicToolsToggle && (
+          <button
+            type="button"
+            onClick={() => void handleTogglePublicTools()}
+            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors duration-200 ${
+              publicToolsDisabled
+                ? "border-red-400 text-red-600 bg-red-50"
+                : "border-emerald-400 text-emerald-700 bg-emerald-50"
+            }`}
+            title="Toggle public tools availability for all visitors"
+          >
+            {publicToolsDisabled ? "Public tools OFF" : "Public tools ON"}
+          </button>
+        )}
 
         {/* Fullscreen button */}
         {isFullscreenSupported && (
