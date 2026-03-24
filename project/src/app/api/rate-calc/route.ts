@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Country } from "country-state-city";
 
 export async function POST(req: NextRequest) {
   try {
@@ -228,68 +227,6 @@ export async function POST(req: NextRequest) {
         zone.service === top3Rates[0].service
     );
 
-    // Remote area check per service using destination zip
-    const remoteAreas: Record<string, boolean> = {};
-    if (destinationZip && destinationZip.trim()) {
-      const destCountryObj = Country.getAllCountries().find(
-        (c) => c.name.toLowerCase() === destination.toLowerCase()
-      );
-      const destCountryCode = destCountryObj?.isoCode || destination;
-
-      const allRemoteAreas = await prisma.remoteArea.findMany({
-        where: {
-          OR: [
-            { country: { equals: destCountryCode, mode: "insensitive" } },
-            { country: { equals: destination, mode: "insensitive" } },
-            { iataCode: { equals: destCountryCode, mode: "insensitive" } },
-          ],
-        },
-      });
-
-      const zipValue = destinationZip.trim();
-      const zipNumber = parseFloat(zipValue);
-
-      const uniqueServices = new Set(filteredRates.map((r) => r.service));
-      for (const service of uniqueServices) {
-        const serviceUpper = service.toUpperCase();
-        let companyName = "";
-        if (serviceUpper.includes("DHL")) companyName = "DHL";
-        else if (serviceUpper.includes("UPS")) companyName = "UPS";
-        else if (serviceUpper.includes("FEDEX")) companyName = "FEDEX";
-        else if (serviceUpper.includes("SNWWE") || serviceUpper.includes("SKYNET")) companyName = "SKYNET";
-        else if (serviceUpper.includes("PARCEL")) companyName = "PARCELFORCE";
-        else if (serviceUpper.includes("DPD")) companyName = "DPD";
-
-        const serviceRemoteAreas = companyName
-          ? allRemoteAreas.filter((a) => a.company.toUpperCase().includes(companyName))
-          : allRemoteAreas;
-
-        let isRemote = false;
-        if (!isNaN(zipNumber)) {
-          isRemote = serviceRemoteAreas.some((area) => {
-            const low = parseFloat(String(area.low || "").trim());
-            const high = parseFloat(String(area.high || "").trim());
-            return !isNaN(low) && !isNaN(high) && zipNumber >= low && zipNumber <= high;
-          });
-          if (!isRemote) {
-            isRemote = serviceRemoteAreas.some((area) => {
-              const lowStr = String(area.low || "").trim();
-              const highStr = String(area.high || "").trim();
-              return lowStr.includes(zipValue) || highStr.includes(zipValue);
-            });
-          }
-        } else {
-          isRemote = serviceRemoteAreas.some((area) => {
-            const lowStr = String(area.low || "").trim();
-            const highStr = String(area.high || "").trim();
-            return lowStr.includes(zipValue) || highStr.includes(zipValue);
-          });
-        }
-
-        remoteAreas[service] = isRemote;
-      }
-    }
-
     return NextResponse.json({
       success: true,
       profitPercentage: profitPercent,
@@ -297,7 +234,6 @@ export async function POST(req: NextRequest) {
         weight: fixedCharge.weight,
         amount: fixedCharge.fixedCharge,
       } : null,
-      remoteAreas,
       zones: zones.map((zone) => ({
         zone: zone.zone,
         country: zone.country,

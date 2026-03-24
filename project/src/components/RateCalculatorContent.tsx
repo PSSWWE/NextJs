@@ -116,7 +116,6 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
       weight: number;
       amount: number;
     } | null;
-    remoteAreas?: Record<string, boolean>;
     top3Rates: Array<{
       rank: number;
       zone: number;
@@ -503,13 +502,10 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
                           ? "Lahore"
                           : getOriginFromService(rate.service);
                       const rank = index < 3 ? index + 1 : null;
-                      const isRemote = results.remoteAreas?.[rate.service] === true;
                       return (
                         <div
                           key={`${rate.vendor}-${rate.service}-${rate.weight}-${index}`}
-                          className={`rounded-xl border bg-white shadow-sm px-3 sm:px-5 py-2.5 sm:py-3 relative ${
-                            isRemote ? "border-red-300" : "border-slate-200"
-                          }`}
+                          className="rounded-xl border border-slate-200 bg-white shadow-sm px-3 sm:px-5 py-2.5 sm:py-3 relative"
                         >
                           {rank !== null && (
                             <span
@@ -560,14 +556,6 @@ export default function RateCalculatorContent({ publicView = false }: RateCalcul
                               <Info className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-slate-700" />
                               <span className="text-[10px] sm:text-xs font-medium text-slate-700 text-center leading-tight">Information</span>
                             </button>
-
-                            {isRemote && (
-                              <div className="flex flex-col items-center gap-px shrink-0">
-                                <AlertTriangle className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-red-600" />
-                                <span className="text-[10px] sm:text-xs font-medium text-slate-700 text-center leading-tight">Remote Area</span>
-                                <span className="text-[9px] sm:text-[10px] text-slate-500 text-center leading-tight">Surcharge may apply</span>
-                              </div>
-                            )}
 
                             <div className="text-right shrink-0">
                               <p className="text-base sm:text-lg font-bold text-slate-900 whitespace-nowrap">
