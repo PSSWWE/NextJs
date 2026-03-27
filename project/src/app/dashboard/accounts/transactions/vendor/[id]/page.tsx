@@ -376,7 +376,9 @@ export default function VendorTransactionsPage() {
       console.error('Error fetching assets:', error);
     }
 
-    const printWindow = window.open('', '_blank');
+    // Open with current URL context so browser print headers/footers
+    // are not based on about:blank.
+    const printWindow = window.open(window.location.href, '_blank');
     if (printWindow) {
       const formatDateRange = () => {
         if (dateRange?.from && dateRange?.to) {
