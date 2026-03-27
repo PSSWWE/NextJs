@@ -223,41 +223,56 @@ export async function GET(
         });
       }
 
-      // Batch fetch payments for CREDIT transactions in paginated results
-      const paginatedCreditInvoices = orderedTransactions
-        .filter((t) => t.type === "CREDIT" && t.invoice)
+      // Batch fetch payments for CREDIT transactions in paginated results.
+      // IMPORTANT: Match by reference first, then fallback to invoice.
+      // Using only "latest payment per invoice" can assign wrong dates when
+      // there are multiple payments against the same invoice.
+      const paginatedCreditTransactions = orderedTransactions.filter(
+        (t) => t.type === "CREDIT"
+      );
+      const paginatedCreditInvoices = paginatedCreditTransactions
+        .filter((t) => t.invoice)
         .map((t) => t.invoice!);
+      const paginatedCreditReferences = paginatedCreditTransactions
+        .filter((t) => t.reference)
+        .map((t) => t.reference!);
 
-      const paginatedPaymentsMap = new Map<string, Date>();
-      if (paginatedCreditInvoices.length > 0) {
+      const paginatedPaymentsByReference = new Map<string, Date>();
+      const paginatedPaymentsByInvoice = new Map<string, Date>();
+      if (
+        paginatedCreditInvoices.length > 0 ||
+        paginatedCreditReferences.length > 0
+      ) {
         const uniquePaginatedInvoices = [...new Set(paginatedCreditInvoices)];
+        const uniquePaginatedReferences = [...new Set(paginatedCreditReferences)];
         const paginatedPayments = await prisma.payment.findMany({
           where: {
-            invoice: { in: uniquePaginatedInvoices },
             fromCustomerId: customerId,
             transactionType: "INCOME",
+            OR: [
+              ...(uniquePaginatedReferences.length > 0
+                ? [{ reference: { in: uniquePaginatedReferences } }]
+                : []),
+              ...(uniquePaginatedInvoices.length > 0
+                ? [{ invoice: { in: uniquePaginatedInvoices } }]
+                : []),
+            ],
           },
           select: {
             invoice: true,
+            reference: true,
             date: true,
           },
           orderBy: { date: "desc" },
         });
 
-        // Group by invoice and take the most recent payment for each
-        const paymentsByInvoice = new Map<string, Date>();
         paginatedPayments.forEach((p) => {
-          if (
-            p.date &&
-            p.invoice &&
-            (!paymentsByInvoice.has(p.invoice) ||
-              paymentsByInvoice.get(p.invoice)! < p.date)
-          ) {
-            paymentsByInvoice.set(p.invoice, p.date);
+          if (p.date && p.reference && !paginatedPaymentsByReference.has(p.reference)) {
+            paginatedPaymentsByReference.set(p.reference, p.date);
           }
-        });
-        paymentsByInvoice.forEach((date, invoice) => {
-          paginatedPaymentsMap.set(invoice, date);
+          if (p.date && p.invoice && !paginatedPaymentsByInvoice.has(p.invoice)) {
+            paginatedPaymentsByInvoice.set(p.invoice, p.date);
+          }
         });
       }
 
@@ -300,11 +315,15 @@ export async function GET(
               }
             }
 
-            // Get payment date from batched data
+            // Get payment date from batched data (reference first, invoice fallback)
             if (transaction.type === "CREDIT") {
-              const paymentDateObj = paginatedPaymentsMap.get(
-                transaction.invoice
-              );
+              const paymentDateObj =
+                (transaction.reference
+                  ? paginatedPaymentsByReference.get(transaction.reference)
+                  : undefined) ||
+                (transaction.invoice
+                  ? paginatedPaymentsByInvoice.get(transaction.invoice)
+                  : undefined);
               if (paymentDateObj) {
                 paymentDate = paymentDateObj.toISOString();
               }
@@ -398,37 +417,47 @@ export async function GET(
       });
     }
 
-    // Batch fetch payments for CREDIT transactions
-    const creditTransactionsWithInvoices = allTransactions
-      .filter(t => t.type === "CREDIT" && t.invoice)
-      .map(t => t.invoice!);
+    // Batch fetch payments for CREDIT transactions.
+    // Match by reference first, then fallback to invoice.
+    const creditTransactions = allTransactions.filter((t) => t.type === "CREDIT");
+    const creditTransactionInvoices = creditTransactions
+      .filter((t) => t.invoice)
+      .map((t) => t.invoice!);
+    const creditTransactionReferences = creditTransactions
+      .filter((t) => t.reference)
+      .map((t) => t.reference!);
     
-    const paymentsMap = new Map<string, Date>();
-    if (creditTransactionsWithInvoices.length > 0) {
-      const uniqueInvoices = [...new Set(creditTransactionsWithInvoices)];
+    const paymentsByReference = new Map<string, Date>();
+    const paymentsByInvoice = new Map<string, Date>();
+    if (creditTransactionInvoices.length > 0 || creditTransactionReferences.length > 0) {
+      const uniqueInvoices = [...new Set(creditTransactionInvoices)];
+      const uniqueReferences = [...new Set(creditTransactionReferences)];
       const payments = await prisma.payment.findMany({
         where: {
-          invoice: { in: uniqueInvoices },
           fromCustomerId: customerId,
-          transactionType: "INCOME"
+          transactionType: "INCOME",
+          OR: [
+            ...(uniqueReferences.length > 0
+              ? [{ reference: { in: uniqueReferences } }]
+              : []),
+            ...(uniqueInvoices.length > 0 ? [{ invoice: { in: uniqueInvoices } }] : []),
+          ],
         },
         select: {
           invoice: true,
+          reference: true,
           date: true
         },
         orderBy: { date: 'desc' }
       });
       
-      // Group by invoice and take the most recent payment for each
-      const paymentsByInvoice = new Map<string, Date>();
-      payments.forEach(p => {
-        if (p.date && p.invoice && (!paymentsByInvoice.has(p.invoice) || 
-            paymentsByInvoice.get(p.invoice)! < p.date)) {
+      payments.forEach((p) => {
+        if (p.date && p.reference && !paymentsByReference.has(p.reference)) {
+          paymentsByReference.set(p.reference, p.date);
+        }
+        if (p.date && p.invoice && !paymentsByInvoice.has(p.invoice)) {
           paymentsByInvoice.set(p.invoice, p.date);
         }
-      });
-      paymentsByInvoice.forEach((date, invoice) => {
-        paymentsMap.set(invoice, date);
       });
     }
 
@@ -452,7 +481,13 @@ export async function GET(
           voucherDate = invoiceData.shipmentDate;
         } else if (transaction.type === "CREDIT") {
           // For CREDIT transactions (payments), use payment date
-          const paymentDate = paymentsMap.get(transaction.invoice);
+          const paymentDate =
+            (transaction.reference
+              ? paymentsByReference.get(transaction.reference)
+              : undefined) ||
+            (transaction.invoice
+              ? paymentsByInvoice.get(transaction.invoice)
+              : undefined);
           if (paymentDate) {
             voucherDate = paymentDate;
           }
@@ -774,37 +809,51 @@ export async function GET(
       });
     }
     
-    // Batch fetch payments for CREDIT transactions in paginated results
-    const paginatedCreditInvoices = orderedTransactions
-      .filter(t => t.type === "CREDIT" && t.invoice)
-      .map(t => t.invoice!);
+    // Batch fetch payments for CREDIT transactions in paginated results.
+    // Match by reference first, then fallback to invoice.
+    const paginatedCreditTransactions = orderedTransactions.filter(
+      (t) => t.type === "CREDIT"
+    );
+    const paginatedCreditInvoices = paginatedCreditTransactions
+      .filter((t) => t.invoice)
+      .map((t) => t.invoice!);
+    const paginatedCreditReferences = paginatedCreditTransactions
+      .filter((t) => t.reference)
+      .map((t) => t.reference!);
     
-    const paginatedPaymentsMap = new Map<string, Date>();
-    if (paginatedCreditInvoices.length > 0) {
+    const paginatedPaymentsByReference = new Map<string, Date>();
+    const paginatedPaymentsByInvoice = new Map<string, Date>();
+    if (paginatedCreditInvoices.length > 0 || paginatedCreditReferences.length > 0) {
       const uniquePaginatedInvoices = [...new Set(paginatedCreditInvoices)];
+      const uniquePaginatedReferences = [...new Set(paginatedCreditReferences)];
       const paginatedPayments = await prisma.payment.findMany({
         where: {
-          invoice: { in: uniquePaginatedInvoices },
           fromCustomerId: customerId,
-          transactionType: "INCOME"
+          transactionType: "INCOME",
+          OR: [
+            ...(uniquePaginatedReferences.length > 0
+              ? [{ reference: { in: uniquePaginatedReferences } }]
+              : []),
+            ...(uniquePaginatedInvoices.length > 0
+              ? [{ invoice: { in: uniquePaginatedInvoices } }]
+              : []),
+          ],
         },
         select: {
           invoice: true,
+          reference: true,
           date: true
         },
         orderBy: { date: 'desc' }
       });
       
-      // Group by invoice and take the most recent payment for each
-      const paymentsByInvoice = new Map<string, Date>();
-      paginatedPayments.forEach(p => {
-        if (p.date && p.invoice && (!paymentsByInvoice.has(p.invoice) || 
-            paymentsByInvoice.get(p.invoice)! < p.date)) {
-          paymentsByInvoice.set(p.invoice, p.date);
+      paginatedPayments.forEach((p) => {
+        if (p.date && p.reference && !paginatedPaymentsByReference.has(p.reference)) {
+          paginatedPaymentsByReference.set(p.reference, p.date);
         }
-      });
-      paymentsByInvoice.forEach((date, invoice) => {
-        paginatedPaymentsMap.set(invoice, date);
+        if (p.date && p.invoice && !paginatedPaymentsByInvoice.has(p.invoice)) {
+          paginatedPaymentsByInvoice.set(p.invoice, p.date);
+        }
       });
     }
     
@@ -846,9 +895,15 @@ export async function GET(
           }
         }
         
-        // Get payment date from batched data
+        // Get payment date from batched data (reference first, invoice fallback)
         if (transaction.type === "CREDIT") {
-          const paymentDateObj = paginatedPaymentsMap.get(transaction.invoice);
+          const paymentDateObj =
+            (transaction.reference
+              ? paginatedPaymentsByReference.get(transaction.reference)
+              : undefined) ||
+            (transaction.invoice
+              ? paginatedPaymentsByInvoice.get(transaction.invoice)
+              : undefined);
           if (paymentDateObj) {
             paymentDate = paymentDateObj.toISOString();
           }
