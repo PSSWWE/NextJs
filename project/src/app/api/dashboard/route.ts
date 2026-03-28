@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getCountryNameFromCode } from "@/lib/utils";
+import { computeMonthlyPartyNetsUsingVoucherDates } from "@/lib/accounts/dashboardVoucherBalances";
 
 const prisma = new PrismaClient();
 
@@ -733,42 +734,37 @@ export async function GET() {
     
     const currentMonthReceivableAmount = currentMonthReceivable._sum.totalAmount || 0;
     
-    // Get monthly accounts data for last 12 months
-    const monthlyAccountsData = [];
+    // Last 12 months: nets from ledger using voucher dates (shipment / payment / note dates), same rules as accounts transaction pages
     const currentDateForAccounts = new Date();
     const monthNamesForAccounts = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    
+    const monthSlices: { targetDate: Date; endExclusive: Date }[] = [];
     for (let i = 11; i >= 0; i--) {
-      // Calculate the date for i months ago
-      const targetDate = new Date(currentDateForAccounts.getFullYear(), currentDateForAccounts.getMonth() - i, 1);
-      const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
-      
-      const monthReceivable = await prisma.customers.aggregate({
-        where: {
-          createdAt: { lte: endDate }
-        },
-        _sum: {
-          currentBalance: true
-        }
-      });
-      
-      const monthPayable = await prisma.vendors.aggregate({
-        where: {
-          createdAt: { lte: endDate }
-        },
-        _sum: {
-          currentBalance: true
-        }
-      });
-      
-      monthlyAccountsData.push({
-        month: `${monthNamesForAccounts[targetDate.getMonth()]} ${targetDate.getFullYear().toString().slice(-2)}`,
-        // For receivable: negative customer balances become positive (they owe us money)
-        receivable: Math.abs(Math.min(monthReceivable._sum.currentBalance || 0, 0)),
-        // For payable: positive vendor balances stay positive (we owe them money)
-        payable: Math.max(monthPayable._sum.currentBalance || 0, 0)
-      });
+      const targetDate = new Date(
+        currentDateForAccounts.getFullYear(),
+        currentDateForAccounts.getMonth() - i,
+        1
+      );
+      const endExclusive = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
+      monthSlices.push({ targetDate, endExclusive });
     }
+
+    const voucherMonthNets = await computeMonthlyPartyNetsUsingVoucherDates(
+      prisma,
+      monthSlices.map((s) => s.endExclusive)
+    );
+
+    const monthlyAccountsData: {
+      month: string;
+      receivable: number;
+      payable: number;
+    }[] = monthSlices.map(({ targetDate }, i) => {
+      const { customerNet, vendorNet } = voucherMonthNets[i];
+      return {
+        month: `${monthNamesForAccounts[targetDate.getMonth()]} ${targetDate.getFullYear().toString().slice(-2)}`,
+        receivable: Math.abs(Math.min(customerNet, 0)),
+        payable: Math.max(vendorNet, 0),
+      };
+    });
     
     // Calculate percentage changes for metric cards
     const calculatePercentageChange = (current: number, previous: number): number => {

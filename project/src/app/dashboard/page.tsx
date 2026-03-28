@@ -53,6 +53,37 @@ import { Country } from "country-state-city";
 import { getCountryNameFromCode } from "@/lib/utils";
 import { getTrackingUrl } from "@/lib/tracking-links";
 
+/** Compact Y-axis for large currency-style values (e.g. 80M, 1.2B). */
+function formatAccountsTrendAxis(value: number): string {
+  if (value === 0) return "0";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) {
+    const n = value / 1_000_000_000;
+    const s =
+      Math.abs(n) >= 100 || Math.abs(n % 1) < 1e-6
+        ? n.toFixed(0)
+        : n.toFixed(1);
+    return `${s}B`;
+  }
+  if (abs >= 1_000_000) {
+    const n = value / 1_000_000;
+    const s =
+      Math.abs(n) >= 100 || Math.abs(n % 1) < 1e-6
+        ? n.toFixed(0)
+        : n.toFixed(1);
+    return `${s}M`;
+  }
+  if (abs >= 1_000) {
+    const n = value / 1_000;
+    const s =
+      Math.abs(n) >= 100 || Math.abs(n % 1) < 1e-6
+        ? n.toFixed(0)
+        : n.toFixed(1);
+    return `${s}K`;
+  }
+  return value.toLocaleString();
+}
+
 const DashboardPage = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'shipments' | 'payments'>('shipments');
@@ -302,7 +333,10 @@ const DashboardPage = () => {
               <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
             </div>
             <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
-              <AreaChart data={data.accountsData?.monthlyAccountsData || []}>
+              <AreaChart
+                data={data.accountsData?.monthlyAccountsData || []}
+                margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+              >
                 <defs>
                   <linearGradient id="colorReceivable" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
@@ -315,7 +349,13 @@ const DashboardPage = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
                 <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
-                <YAxis stroke="#6B7280" fontSize={12} />
+                <YAxis
+                  stroke="#6B7280"
+                  fontSize={11}
+                  width={52}
+                  tickFormatter={formatAccountsTrendAxis}
+                  tickMargin={6}
+                />
                 <Tooltip 
                   contentStyle={{ 
                     backgroundColor: '#1F2937', 
@@ -324,10 +364,13 @@ const DashboardPage = () => {
                     color: '#F9FAFB',
                     fontSize: '12px'
                   }}
-                  formatter={(value, name) => [
-                    value.toLocaleString(),
-                    name === 'receivable' ? 'Receivable' : 'Payable'
-                  ]}
+                  formatter={(value, name) => {
+                    const n = typeof value === "number" ? value : Number(value);
+                    return [
+                      n.toLocaleString(),
+                      name === "receivable" ? "Receivable" : "Payable",
+                    ];
+                  }}
                 />
                 <Area 
                   type="monotone" 

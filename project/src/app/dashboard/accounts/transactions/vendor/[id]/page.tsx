@@ -24,8 +24,10 @@ import {
   format,
   parseISO,
 } from "date-fns";
-
-
+import {
+  computeDateRangeForPeriod,
+  type AccountsPeriodType,
+} from "@/lib/accounts/periodDateRange";
 
 type Vendor = {
   id: number;
@@ -68,7 +70,7 @@ export default function VendorTransactionsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState<number | 'all'>(10); // Page size state
-  const [periodType, setPeriodType] = useState<'month' | 'last3month' | 'last6month' | 'year' | 'financialyear' | 'custom'>('month');
+  const [periodType, setPeriodType] = useState<AccountsPeriodType>("month");
   const [dateRange, setDateRange] = useState<{ from: Date; to?: Date } | undefined>(() => {
     const now = new Date();
     const firstDayOfMonth = new Date(
@@ -90,6 +92,8 @@ export default function VendorTransactionsPage() {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const isInitialMount = useRef(true);
   const isTypingDate = useRef(false);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const fetchGenerationRef = useRef(0);
 
   // Sorting states
   type SortField = "voucherDate" | "amount" | "type" | "description" | "reference";
@@ -164,6 +168,11 @@ export default function VendorTransactionsPage() {
     const startTime = performance.now();
     console.log('[Vendor Transactions] Fetch started at:', new Date().toISOString());
 
+    fetchAbortRef.current?.abort();
+    const ac = new AbortController();
+    fetchAbortRef.current = ac;
+    const gen = ++fetchGenerationRef.current;
+
     try {
       setLoading(true);
 
@@ -181,12 +190,17 @@ export default function VendorTransactionsPage() {
         params.set('recalc', 'true');
       }
 
-      const response = await fetch(`/api/accounts/transactions/vendor/${vendorId}?${params}`);
+      const response = await fetch(
+        `/api/accounts/transactions/vendor/${vendorId}?${params}`,
+        { signal: ac.signal }
+      );
       const data = await response.json();
-      
+
+      if (gen !== fetchGenerationRef.current) return;
+
       const endTime = performance.now();
       const duration = endTime - startTime;
-      
+
       if (response.ok) {
         setVendor(data.vendor);
         setTransactions(data.transactions);
@@ -198,11 +212,16 @@ export default function VendorTransactionsPage() {
         setLoadTime(null);
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
       console.error("Error fetching vendor data:", error);
       setLoadTime(null);
     } finally {
-      setLoading(false);
-      setIsRecalculating(false);
+      if (gen === fetchGenerationRef.current) {
+        setLoading(false);
+        setIsRecalculating(false);
+      }
     }
   };
 
@@ -258,92 +277,29 @@ export default function VendorTransactionsPage() {
     );
   };
 
-  // Update date range based on period type (doesn't trigger fetch)
-  const updatePeriodDates = () => {
-    const now = new Date();
-    let startDate: Date;
-    let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1); // Tomorrow to include today
-
-    switch (periodType) {
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'last3month':
-        const threeMonthsAgo = new Date(now);
-        threeMonthsAgo.setMonth(now.getMonth() - 3);
-        startDate = new Date(threeMonthsAgo.getFullYear(), threeMonthsAgo.getMonth(), 1);
-        break;
-      case 'last6month':
-        const sixMonthsAgo = new Date(now);
-        sixMonthsAgo.setMonth(now.getMonth() - 6);
-        startDate = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth(), 1);
-        break;
-      case 'year':
-        // Last 12 months from today
-        const twelveMonthsAgo = new Date(now);
-        twelveMonthsAgo.setMonth(now.getMonth() - 12);
-        startDate = new Date(twelveMonthsAgo.getFullYear(), twelveMonthsAgo.getMonth(), twelveMonthsAgo.getDate());
-        break;
-      case 'financialyear':
-        if (now.getMonth() >= 6) {
-          startDate = new Date(now.getFullYear(), 6, 1); // July 1 of current year
-        } else {
-          startDate = new Date(now.getFullYear() - 1, 6, 1); // July 1 of previous year
-        }
-        break;
-      case 'custom':
-        // Validate that dates are complete (YYYY-MM-DD format, 10 characters)
-        if (customStartDate && customEndDate && 
-            customStartDate.length === 10 && customEndDate.length === 10) {
-          const startDateObj = new Date(customStartDate);
-          const endDateObj = new Date(customEndDate);
-          // Check if dates are valid
-          if (!isNaN(startDateObj.getTime()) && !isNaN(endDateObj.getTime())) {
-            startDate = new Date(customStartDate);
-            startDate.setHours(0, 0, 0, 0); // Start of the day
-            endDate = new Date(customEndDate);
-            endDate.setHours(23, 59, 59, 999); // End of the selected day
-          } else {
-            // Invalid dates - don't update
-            setDateRange(undefined);
-            return;
-          }
-        } else {
-          // Don't set date range if custom dates not provided or incomplete
-          setDateRange(undefined);
-          return;
-        }
-        break;
-      default:
-        const defaultThreeMonthsAgo = new Date(now);
-        defaultThreeMonthsAgo.setMonth(now.getMonth() - 3);
-        startDate = new Date(defaultThreeMonthsAgo.getFullYear(), defaultThreeMonthsAgo.getMonth(), 1);
-    }
-
-    setDateRange({ from: startDate, to: endDate });
-  };
-
-  // Update date range when period type or custom dates change
-  // Only update if dates are complete (10 chars each) or period type is not custom
+  // Custom period only: preset periods set dateRange in the Select handler together with
+  // periodType (one batch) so the first fetch never uses stale dates. Debounced here while typing.
   useEffect(() => {
-    if (periodType === 'custom') {
-      // Only update if both dates are complete (10 characters = YYYY-MM-DD format)
-      if (customStartDate && customEndDate && 
-          customStartDate.length === 10 && customEndDate.length === 10) {
-        // Delay to ensure typing flag is cleared and user has finished typing
-        const timer = setTimeout(() => {
-          if (!isTypingDate.current) {
-            updatePeriodDates();
-          }
-        }, 500);
-        return () => clearTimeout(timer);
-      }
-      // Don't update dateRange if dates are incomplete - keep previous value
-      // This prevents triggering fetch while user is typing
-    } else {
-      updatePeriodDates();
+    if (periodType !== "custom") return;
+    if (
+      customStartDate &&
+      customEndDate &&
+      customStartDate.length === 10 &&
+      customEndDate.length === 10
+    ) {
+      const timer = setTimeout(() => {
+        if (!isTypingDate.current) {
+          const r = computeDateRangeForPeriod(
+            "custom",
+            customStartDate,
+            customEndDate
+          );
+          if (r) setDateRange(r);
+          else setDateRange(undefined);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodType, customStartDate, customEndDate]);
 
   // Export functions
@@ -1271,7 +1227,17 @@ export default function VendorTransactionsPage() {
             <Select
               value={periodType}
               onValueChange={(value: string) => {
-                setPeriodType(value as any);
+                const v = value as AccountsPeriodType;
+                setPeriodType(v);
+                setPage(1);
+                if (v !== "custom") {
+                  const range = computeDateRangeForPeriod(
+                    v,
+                    customStartDate,
+                    customEndDate
+                  );
+                  if (range) setDateRange(range);
+                }
               }}
             >
               <SelectTrigger className="w-[160px]">
