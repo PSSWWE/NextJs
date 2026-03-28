@@ -138,39 +138,240 @@ export async function GET(
       );
     }
 
-    // Lightweight path: just list transactions using existing balances, no full-history recalculation
+    // List path: use existing balances; always filter and sort by voucher date (not createdAt)
     if (!recalcBalances) {
       const whereForList: any = { ...whereClause };
 
-      // Apply date range on createdAt (lightweight approximation of voucher-date filtering)
-      if (fromDate || toDate) {
-        const createdAtFilter: any = {};
-        if (fromDate) {
-          createdAtFilter.gte = new Date(fromDate);
-        }
-        if (toDate) {
-          createdAtFilter.lte = new Date(toDate);
-        }
-        whereForList.createdAt = createdAtFilter;
+      const listTransactions = await prisma.customerTransaction.findMany({
+        where: whereForList,
+      });
+
+      if (listTransactions.length === 0) {
+        return NextResponse.json({
+          customer: {
+            id: customer.id,
+            CompanyName: customer.CompanyName,
+            PersonName: customer.PersonName,
+            currentBalance: customer.currentBalance,
+            creditLimit: customer.creditLimit,
+            Address: customer.Address,
+            City: customer.City,
+            Country: customer.Country,
+          },
+          transactions: [],
+          total: 0,
+          page,
+          limit: isAllLimit || !limit ? 0 : limit,
+          totalPages: 1,
+        });
       }
 
-      const [transactions, total] = await Promise.all([
-        prisma.customerTransaction.findMany({
-          where: whereForList,
-          orderBy: { [validSortField]: validSortOrder },
-          ...(isAllLimit || !limit
-            ? {}
-            : {
-                skip,
-                take: limit,
-              }),
-        }),
-        prisma.customerTransaction.count({
-          where: whereForList,
-        }),
-      ]);
+      const creditNoteRefsList = listTransactions
+        .filter(
+          (t) =>
+            t.reference?.startsWith("#CREDIT") ||
+            t.reference?.startsWith("#DEBIT")
+        )
+        .map((t) => t.reference!)
+        .filter((ref, index, self) => self.indexOf(ref) === index);
 
-      const orderedTransactions = transactions;
+      const creditNotesMapList = new Map<string, Date>();
+      if (creditNoteRefsList.length > 0) {
+        const creditNotesList = await prisma.creditNote.findMany({
+          where: { creditNoteNumber: { in: creditNoteRefsList } },
+          select: { creditNoteNumber: true, date: true },
+        });
+        creditNotesList.forEach((cn) => {
+          if (cn.date) creditNotesMapList.set(cn.creditNoteNumber, cn.date);
+        });
+      }
+
+      const invoiceNumbersList = listTransactions
+        .filter((t) => t.invoice)
+        .map((t) => t.invoice!)
+        .filter((inv, index, self) => self.indexOf(inv) === index);
+
+      const invoicesMapList = new Map<string, { shipmentDate?: Date }>();
+      if (invoiceNumbersList.length > 0) {
+        const invoicesList = await prisma.invoice.findMany({
+          where: { invoiceNumber: { in: invoiceNumbersList } },
+          include: {
+            shipment: { select: { shipmentDate: true } },
+          },
+        });
+        invoicesList.forEach((inv) => {
+          invoicesMapList.set(inv.invoiceNumber, {
+            shipmentDate: inv.shipment?.shipmentDate || undefined,
+          });
+        });
+      }
+
+      const creditTxList = listTransactions.filter((t) => t.type === "CREDIT");
+      const creditInvoicesList = creditTxList
+        .filter((t) => t.invoice)
+        .map((t) => t.invoice!);
+      const creditRefsList = creditTxList
+        .filter((t) => t.reference)
+        .map((t) => t.reference!);
+
+      const paymentsByReferenceList = new Map<string, Date>();
+      const paymentsByInvoiceList = new Map<string, Date>();
+      if (creditInvoicesList.length > 0 || creditRefsList.length > 0) {
+        const uniqueInvList = [...new Set(creditInvoicesList)];
+        const uniqueRefList = [...new Set(creditRefsList)];
+        const paymentsList = await prisma.payment.findMany({
+          where: {
+            fromCustomerId: customerId,
+            transactionType: "INCOME",
+            OR: [
+              ...(uniqueRefList.length > 0
+                ? [{ reference: { in: uniqueRefList } }]
+                : []),
+              ...(uniqueInvList.length > 0
+                ? [{ invoice: { in: uniqueInvList } }]
+                : []),
+            ],
+          },
+          select: { invoice: true, reference: true, date: true },
+          orderBy: { date: "desc" },
+        });
+        paymentsList.forEach((p) => {
+          if (p.date && p.reference && !paymentsByReferenceList.has(p.reference)) {
+            paymentsByReferenceList.set(p.reference, p.date);
+          }
+          if (p.date && p.invoice && !paymentsByInvoiceList.has(p.invoice)) {
+            paymentsByInvoiceList.set(p.invoice, p.date);
+          }
+        });
+      }
+
+      const transactionsWithVoucherDatesList = listTransactions.map(
+        (transaction) => {
+          let voucherDate = transaction.createdAt;
+
+          if (transaction.reference) {
+            const creditNoteDate = creditNotesMapList.get(transaction.reference);
+            if (creditNoteDate) {
+              voucherDate = creditNoteDate;
+            }
+          }
+
+          if (transaction.invoice) {
+            const invoiceData = invoicesMapList.get(transaction.invoice);
+            if (transaction.type === "DEBIT" && invoiceData?.shipmentDate) {
+              voucherDate = invoiceData.shipmentDate;
+            } else if (transaction.type === "CREDIT") {
+              const paymentDate =
+                (transaction.reference
+                  ? paymentsByReferenceList.get(transaction.reference)
+                  : undefined) ||
+                (transaction.invoice
+                  ? paymentsByInvoiceList.get(transaction.invoice)
+                  : undefined);
+              if (paymentDate) {
+                voucherDate = paymentDate;
+              }
+            }
+          }
+
+          return { ...transaction, voucherDate };
+        }
+      );
+
+      let filteredTransactionsList = transactionsWithVoucherDatesList;
+      if (fromDate || toDate) {
+        const fromDateObj = fromDate ? new Date(fromDate) : null;
+        const toDateObj = toDate ? new Date(toDate) : null;
+        filteredTransactionsList = transactionsWithVoucherDatesList.filter(
+          (transaction) => {
+            const voucherDate = transaction.voucherDate;
+            if (fromDateObj && voucherDate < fromDateObj) {
+              return false;
+            }
+            if (toDateObj && voucherDate > toDateObj) {
+              return false;
+            }
+            return true;
+          }
+        );
+      }
+
+      if (filteredTransactionsList.length === 0) {
+        return NextResponse.json({
+          customer: {
+            id: customer.id,
+            CompanyName: customer.CompanyName,
+            PersonName: customer.PersonName,
+            currentBalance: customer.currentBalance,
+            creditLimit: customer.creditLimit,
+            Address: customer.Address,
+            City: customer.City,
+            Country: customer.Country,
+          },
+          transactions: [],
+          total: 0,
+          page,
+          limit: isAllLimit || !limit ? 0 : limit,
+          totalPages: 1,
+        });
+      }
+
+      const total = filteredTransactionsList.length;
+
+      const transactionIdsForSort = filteredTransactionsList.map((t) => t.id);
+      const fullTransactionsForSortingList =
+        await prisma.customerTransaction.findMany({
+          where: { id: { in: transactionIdsForSort } },
+          orderBy: { [validSortField]: validSortOrder },
+        });
+
+      const transactionDataMapList = new Map(
+        fullTransactionsForSortingList.map((t) => [t.id, t])
+      );
+
+      filteredTransactionsList.sort((a, b) => {
+        const transactionA = transactionDataMapList.get(a.id);
+        const transactionB = transactionDataMapList.get(b.id);
+        if (!transactionA || !transactionB) return 0;
+
+        if (validSortField === "createdAt") {
+          const dateDiff =
+            a.voucherDate.getTime() - b.voucherDate.getTime();
+          if (dateDiff !== 0) {
+            return validSortOrder === "desc" ? -dateDiff : dateDiff;
+          }
+          if (a.type === "DEBIT" && b.type === "CREDIT") {
+            return validSortOrder === "desc" ? 1 : -1;
+          }
+          if (a.type === "CREDIT" && b.type === "DEBIT") {
+            return validSortOrder === "desc" ? -1 : 1;
+          }
+          return 0;
+        }
+        const aIndex = fullTransactionsForSortingList.findIndex(
+          (t) => t.id === a.id
+        );
+        const bIndex = fullTransactionsForSortingList.findIndex(
+          (t) => t.id === b.id
+        );
+        return aIndex - bIndex;
+      });
+
+      const paginatedTransactionIdsList =
+        isAllLimit || !limit
+          ? filteredTransactionsList.map((t) => t.id)
+          : filteredTransactionsList
+              .slice(skip, skip + limit)
+              .map((t) => t.id);
+
+      const pageRows = await prisma.customerTransaction.findMany({
+        where: { id: { in: paginatedTransactionIdsList } },
+      });
+
+      const transactionMapList = new Map(pageRows.map((t) => [t.id, t]));
+      const orderedTransactions = paginatedTransactionIdsList
+        .map((id) => transactionMapList.get(id))
+        .filter((t): t is NonNullable<typeof t> => t !== undefined);
 
       // Batch fetch shipment information and payment dates for paginated transactions
       const paginatedInvoiceNumbers = orderedTransactions
