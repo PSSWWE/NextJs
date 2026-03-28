@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { addCustomerTransaction, createJournalEntryForTransaction } from "@/lib/utils";
 import { Country } from "country-state-city";
+import { resolveCreditPaymentVoucherDate } from "@/lib/accounts/resolveCreditPaymentVoucherDate";
 
 export async function GET(
   req: NextRequest,
@@ -214,12 +215,17 @@ export async function GET(
         .filter((t) => t.reference)
         .map((t) => t.reference!);
 
-      const paymentsByReferenceList = new Map<string, Date>();
-      const paymentsByInvoiceList = new Map<string, Date>();
+      let paymentsListForVoucher: Array<{
+        id: number;
+        date: Date;
+        amount: number;
+        invoice: string | null;
+        reference: string | null;
+      }> = [];
       if (creditInvoicesList.length > 0 || creditRefsList.length > 0) {
         const uniqueInvList = [...new Set(creditInvoicesList)];
         const uniqueRefList = [...new Set(creditRefsList)];
-        const paymentsList = await prisma.payment.findMany({
+        paymentsListForVoucher = await prisma.payment.findMany({
           where: {
             fromCustomerId: customerId,
             transactionType: "INCOME",
@@ -232,16 +238,14 @@ export async function GET(
                 : []),
             ],
           },
-          select: { invoice: true, reference: true, date: true },
+          select: {
+            id: true,
+            invoice: true,
+            reference: true,
+            date: true,
+            amount: true,
+          },
           orderBy: { date: "desc" },
-        });
-        paymentsList.forEach((p) => {
-          if (p.date && p.reference && !paymentsByReferenceList.has(p.reference)) {
-            paymentsByReferenceList.set(p.reference, p.date);
-          }
-          if (p.date && p.invoice && !paymentsByInvoiceList.has(p.invoice)) {
-            paymentsByInvoiceList.set(p.invoice, p.date);
-          }
         });
       }
 
@@ -256,21 +260,26 @@ export async function GET(
             }
           }
 
-          if (transaction.invoice) {
+          if (transaction.type === "CREDIT") {
+            const fromCreditNote =
+              transaction.reference &&
+              creditNotesMapList.has(transaction.reference);
+            if (!fromCreditNote) {
+              const paymentDate = resolveCreditPaymentVoucherDate(
+                {
+                  amount: transaction.amount,
+                  invoice: transaction.invoice,
+                  reference: transaction.reference,
+                  createdAt: transaction.createdAt,
+                },
+                paymentsListForVoucher
+              );
+              if (paymentDate) voucherDate = paymentDate;
+            }
+          } else if (transaction.invoice) {
             const invoiceData = invoicesMapList.get(transaction.invoice);
             if (transaction.type === "DEBIT" && invoiceData?.shipmentDate) {
               voucherDate = invoiceData.shipmentDate;
-            } else if (transaction.type === "CREDIT") {
-              const paymentDate =
-                (transaction.reference
-                  ? paymentsByReferenceList.get(transaction.reference)
-                  : undefined) ||
-                (transaction.invoice
-                  ? paymentsByInvoiceList.get(transaction.invoice)
-                  : undefined);
-              if (paymentDate) {
-                voucherDate = paymentDate;
-              }
             }
           }
 
@@ -438,15 +447,20 @@ export async function GET(
         .filter((t) => t.reference)
         .map((t) => t.reference!);
 
-      const paginatedPaymentsByReference = new Map<string, Date>();
-      const paginatedPaymentsByInvoice = new Map<string, Date>();
+      let paginatedPaymentsList: Array<{
+        id: number;
+        date: Date;
+        amount: number;
+        invoice: string | null;
+        reference: string | null;
+      }> = [];
       if (
         paginatedCreditInvoices.length > 0 ||
         paginatedCreditReferences.length > 0
       ) {
         const uniquePaginatedInvoices = [...new Set(paginatedCreditInvoices)];
         const uniquePaginatedReferences = [...new Set(paginatedCreditReferences)];
-        const paginatedPayments = await prisma.payment.findMany({
+        paginatedPaymentsList = await prisma.payment.findMany({
           where: {
             fromCustomerId: customerId,
             transactionType: "INCOME",
@@ -460,20 +474,13 @@ export async function GET(
             ],
           },
           select: {
+            id: true,
             invoice: true,
             reference: true,
             date: true,
+            amount: true,
           },
           orderBy: { date: "desc" },
-        });
-
-        paginatedPayments.forEach((p) => {
-          if (p.date && p.reference && !paginatedPaymentsByReference.has(p.reference)) {
-            paginatedPaymentsByReference.set(p.reference, p.date);
-          }
-          if (p.date && p.invoice && !paginatedPaymentsByInvoice.has(p.invoice)) {
-            paginatedPaymentsByInvoice.set(p.invoice, p.date);
-          }
         });
       }
 
@@ -486,7 +493,6 @@ export async function GET(
           let creditNoteDate: string | undefined = undefined;
           let consigneeName: string | undefined = undefined;
 
-          // Get credit note date from batched data
           if (transaction.reference) {
             const cnDate = paginatedCreditNotesMap.get(transaction.reference);
             if (cnDate) {
@@ -494,7 +500,25 @@ export async function GET(
             }
           }
 
-          if (transaction.invoice) {
+          if (transaction.type === "CREDIT") {
+            const fromCreditNote =
+              transaction.reference &&
+              paginatedCreditNotesMap.has(transaction.reference);
+            if (!fromCreditNote) {
+              const paymentDateObj = resolveCreditPaymentVoucherDate(
+                {
+                  amount: transaction.amount,
+                  invoice: transaction.invoice,
+                  reference: transaction.reference,
+                  createdAt: transaction.createdAt,
+                },
+                paginatedPaymentsList
+              );
+              if (paymentDateObj) {
+                paymentDate = paymentDateObj.toISOString();
+              }
+            }
+          } else if (transaction.invoice) {
             const invoice = paginatedInvoicesMap.get(transaction.invoice);
 
             if (invoice?.shipment) {
@@ -513,20 +537,6 @@ export async function GET(
 
               if (invoice.shipment.recipientName) {
                 consigneeName = invoice.shipment.recipientName;
-              }
-            }
-
-            // Get payment date from batched data (reference first, invoice fallback)
-            if (transaction.type === "CREDIT") {
-              const paymentDateObj =
-                (transaction.reference
-                  ? paginatedPaymentsByReference.get(transaction.reference)
-                  : undefined) ||
-                (transaction.invoice
-                  ? paginatedPaymentsByInvoice.get(transaction.invoice)
-                  : undefined);
-              if (paymentDateObj) {
-                paymentDate = paymentDateObj.toISOString();
               }
             }
           }
@@ -628,12 +638,17 @@ export async function GET(
       .filter((t) => t.reference)
       .map((t) => t.reference!);
     
-    const paymentsByReference = new Map<string, Date>();
-    const paymentsByInvoice = new Map<string, Date>();
+    let paymentsForVoucherHeavy: Array<{
+      id: number;
+      date: Date;
+      amount: number;
+      invoice: string | null;
+      reference: string | null;
+    }> = [];
     if (creditTransactionInvoices.length > 0 || creditTransactionReferences.length > 0) {
       const uniqueInvoices = [...new Set(creditTransactionInvoices)];
       const uniqueReferences = [...new Set(creditTransactionReferences)];
-      const payments = await prisma.payment.findMany({
+      paymentsForVoucherHeavy = await prisma.payment.findMany({
         where: {
           fromCustomerId: customerId,
           transactionType: "INCOME",
@@ -645,28 +660,20 @@ export async function GET(
           ],
         },
         select: {
+          id: true,
           invoice: true,
           reference: true,
-          date: true
+          date: true,
+          amount: true,
         },
-        orderBy: { date: 'desc' }
-      });
-      
-      payments.forEach((p) => {
-        if (p.date && p.reference && !paymentsByReference.has(p.reference)) {
-          paymentsByReference.set(p.reference, p.date);
-        }
-        if (p.date && p.invoice && !paymentsByInvoice.has(p.invoice)) {
-          paymentsByInvoice.set(p.invoice, p.date);
-        }
+        orderBy: { date: "desc" },
       });
     }
 
     // Map transactions with voucher dates using batched data
     const transactionsWithVoucherDates = allTransactions.map((transaction) => {
       let voucherDate = transaction.createdAt;
-      
-      // Check credit/debit note dates
+
       if (transaction.reference) {
         const creditNoteDate = creditNotesMap.get(transaction.reference);
         if (creditNoteDate) {
@@ -674,30 +681,31 @@ export async function GET(
         }
       }
 
-      if (transaction.invoice) {
+      if (transaction.type === "CREDIT") {
+        const fromCreditNote =
+          transaction.reference && creditNotesMap.has(transaction.reference);
+        if (!fromCreditNote) {
+          const paymentDate = resolveCreditPaymentVoucherDate(
+            {
+              amount: transaction.amount,
+              invoice: transaction.invoice,
+              reference: transaction.reference,
+              createdAt: transaction.createdAt,
+            },
+            paymentsForVoucherHeavy
+          );
+          if (paymentDate) voucherDate = paymentDate;
+        }
+      } else if (transaction.invoice) {
         const invoiceData = invoicesMap.get(transaction.invoice);
-        
         if (transaction.type === "DEBIT" && invoiceData?.shipmentDate) {
-          // For DEBIT transactions (shipments), use shipmentDate
           voucherDate = invoiceData.shipmentDate;
-        } else if (transaction.type === "CREDIT") {
-          // For CREDIT transactions (payments), use payment date
-          const paymentDate =
-            (transaction.reference
-              ? paymentsByReference.get(transaction.reference)
-              : undefined) ||
-            (transaction.invoice
-              ? paymentsByInvoice.get(transaction.invoice)
-              : undefined);
-          if (paymentDate) {
-            voucherDate = paymentDate;
-          }
         }
       }
-      
+
       return {
         ...transaction,
-        voucherDate
+        voucherDate,
       };
     });
 
@@ -1022,12 +1030,17 @@ export async function GET(
       .filter((t) => t.reference)
       .map((t) => t.reference!);
     
-    const paginatedPaymentsByReference = new Map<string, Date>();
-    const paginatedPaymentsByInvoice = new Map<string, Date>();
+    let paginatedPaymentsListRecalc: Array<{
+      id: number;
+      date: Date;
+      amount: number;
+      invoice: string | null;
+      reference: string | null;
+    }> = [];
     if (paginatedCreditInvoices.length > 0 || paginatedCreditReferences.length > 0) {
       const uniquePaginatedInvoices = [...new Set(paginatedCreditInvoices)];
       const uniquePaginatedReferences = [...new Set(paginatedCreditReferences)];
-      const paginatedPayments = await prisma.payment.findMany({
+      paginatedPaymentsListRecalc = await prisma.payment.findMany({
         where: {
           fromCustomerId: customerId,
           transactionType: "INCOME",
@@ -1041,52 +1054,61 @@ export async function GET(
           ],
         },
         select: {
+          id: true,
           invoice: true,
           reference: true,
-          date: true
+          date: true,
+          amount: true,
         },
-        orderBy: { date: 'desc' }
-      });
-      
-      paginatedPayments.forEach((p) => {
-        if (p.date && p.reference && !paginatedPaymentsByReference.has(p.reference)) {
-          paginatedPaymentsByReference.set(p.reference, p.date);
-        }
-        if (p.date && p.invoice && !paginatedPaymentsByInvoice.has(p.invoice)) {
-          paginatedPaymentsByInvoice.set(p.invoice, p.date);
-        }
+        orderBy: { date: "desc" },
       });
     }
-    
-    // Map transactions with shipment info using batched data
+
     const transactionsWithShipmentInfo = orderedTransactions.map((transaction) => {
       let shipmentInfo = null;
       let shipmentDate: string | undefined = undefined;
       let paymentDate: string | undefined = undefined;
       let creditNoteDate: string | undefined = undefined;
       let consigneeName: string | undefined = undefined;
-      
-      // Get credit note date from batched data
+
       if (transaction.reference) {
         const cnDate = paginatedCreditNotesMap.get(transaction.reference);
         if (cnDate) {
           creditNoteDate = cnDate.toISOString();
         }
       }
-      
-      if (transaction.invoice) {
+
+      if (transaction.type === "CREDIT") {
+        const fromCreditNote =
+          transaction.reference &&
+          paginatedCreditNotesMap.has(transaction.reference);
+        if (!fromCreditNote) {
+          const paymentDateObj = resolveCreditPaymentVoucherDate(
+            {
+              amount: transaction.amount,
+              invoice: transaction.invoice,
+              reference: transaction.reference,
+              createdAt: transaction.createdAt,
+            },
+            paginatedPaymentsListRecalc
+          );
+          if (paymentDateObj) {
+            paymentDate = paymentDateObj.toISOString();
+          }
+        }
+      } else if (transaction.invoice) {
         const invoice = paginatedInvoicesMap.get(transaction.invoice);
-        
+
         if (invoice?.shipment) {
           shipmentInfo = {
             awbNo: invoice.shipment.trackingId,
             weight: invoice.shipment.weight,
             destination: invoice.shipment.destination,
             referenceNo: invoice.shipment.referenceNumber,
-            status: invoice.shipment.deliveryStatus || 'Sale',
-            shipmentDate: invoice.shipment.shipmentDate
+            status: invoice.shipment.deliveryStatus || "Sale",
+            shipmentDate: invoice.shipment.shipmentDate,
           };
-          
+
           if (invoice.shipment.shipmentDate) {
             shipmentDate = invoice.shipment.shipmentDate.toISOString();
           }
@@ -1095,29 +1117,15 @@ export async function GET(
             consigneeName = invoice.shipment.recipientName;
           }
         }
-        
-        // Get payment date from batched data (reference first, invoice fallback)
-        if (transaction.type === "CREDIT") {
-          const paymentDateObj =
-            (transaction.reference
-              ? paginatedPaymentsByReference.get(transaction.reference)
-              : undefined) ||
-            (transaction.invoice
-              ? paginatedPaymentsByInvoice.get(transaction.invoice)
-              : undefined);
-          if (paymentDateObj) {
-            paymentDate = paymentDateObj.toISOString();
-          }
-        }
       }
-      
+
       return {
         ...transaction,
         shipmentInfo,
         shipmentDate,
         paymentDate,
         creditNoteDate,
-        consigneeName
+        consigneeName,
       };
     });
 
@@ -1130,7 +1138,7 @@ export async function GET(
         creditLimit: customer.creditLimit,
         Address: customer.Address,
         City: customer.City,
-        Country: customer.Country
+        Country: customer.Country,
       },
       transactions: transactionsWithShipmentInfo,
       total,

@@ -1,4 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
+import {
+  resolveCreditPaymentVoucherDate,
+  type PaymentRowForVoucherDate,
+} from "@/lib/accounts/resolveCreditPaymentVoucherDate";
 
 type LedgerTxn = {
   type: string;
@@ -46,28 +50,31 @@ function customerVoucherDate(
   t: LedgerTxn,
   creditNotesMap: Map<string, Date>,
   invoicesMap: Map<string, { shipmentDate?: Date }>,
-  paymentsByReference: Map<string, Date>,
-  paymentsByInvoice: Map<string, Date>,
-  customerId: number
+  partyPayments: PaymentRowForVoucherDate[]
 ): Date {
   let voucherDate = t.createdAt;
   if (t.reference) {
     const creditNoteDate = creditNotesMap.get(t.reference);
     if (creditNoteDate) voucherDate = creditNoteDate;
   }
-  if (t.invoice) {
+  if (t.type === "CREDIT") {
+    const fromNote = t.reference && creditNotesMap.has(t.reference);
+    if (!fromNote) {
+      const paymentDate = resolveCreditPaymentVoucherDate(
+        {
+          amount: t.amount,
+          invoice: t.invoice,
+          reference: t.reference,
+          createdAt: t.createdAt,
+        },
+        partyPayments
+      );
+      if (paymentDate) voucherDate = paymentDate;
+    }
+  } else if (t.invoice) {
     const invoiceData = invoicesMap.get(t.invoice);
     if (t.type === "DEBIT" && invoiceData?.shipmentDate) {
       voucherDate = invoiceData.shipmentDate;
-    } else if (t.type === "CREDIT") {
-      const paymentDate =
-        (t.reference
-          ? paymentsByReference.get(`${customerId}:${t.reference}`)
-          : undefined) ||
-        (t.invoice
-          ? paymentsByInvoice.get(`${customerId}:${t.invoice}`)
-          : undefined);
-      if (paymentDate) voucherDate = paymentDate;
     }
   }
   return voucherDate;
@@ -77,28 +84,31 @@ function vendorVoucherDate(
   t: LedgerTxn,
   debitNotesMap: Map<string, Date>,
   invoicesMap: Map<string, { shipmentDate?: Date }>,
-  paymentsByReference: Map<string, Date>,
-  paymentsByInvoice: Map<string, Date>,
-  vendorId: number
+  partyPayments: PaymentRowForVoucherDate[]
 ): Date {
   let voucherDate = t.createdAt;
   if (t.reference) {
     const debitNoteDate = debitNotesMap.get(t.reference);
     if (debitNoteDate) voucherDate = debitNoteDate;
   }
-  if (t.invoice) {
+  if (t.type === "CREDIT") {
+    const fromNote = t.reference && debitNotesMap.has(t.reference);
+    if (!fromNote) {
+      const paymentDate = resolveCreditPaymentVoucherDate(
+        {
+          amount: t.amount,
+          invoice: t.invoice,
+          reference: t.reference,
+          createdAt: t.createdAt,
+        },
+        partyPayments
+      );
+      if (paymentDate) voucherDate = paymentDate;
+    }
+  } else if (t.invoice) {
     const invoiceData = invoicesMap.get(t.invoice);
     if (t.type === "DEBIT" && invoiceData?.shipmentDate) {
       voucherDate = invoiceData.shipmentDate;
-    } else if (t.type === "CREDIT") {
-      const paymentDate =
-        (t.reference
-          ? paymentsByReference.get(`${vendorId}:${t.reference}`)
-          : undefined) ||
-        (t.invoice
-          ? paymentsByInvoice.get(`${vendorId}:${t.invoice}`)
-          : undefined);
-      if (paymentDate) voucherDate = paymentDate;
     }
   }
   return voucherDate;
@@ -260,10 +270,8 @@ export async function computeMonthlyPartyNetsUsingVoucherDates(
   ] as number[];
   const vendorIds = [...new Set(allVendorTx.map((t) => t.vendorId))] as number[];
 
-  const customerPaymentByRef = new Map<string, Date>();
-  const customerPaymentByInv = new Map<string, Date>();
-  const vendorPaymentByRef = new Map<string, Date>();
-  const vendorPaymentByInv = new Map<string, Date>();
+  const customerPaymentsByParty = new Map<number, PaymentRowForVoucherDate[]>();
+  const vendorPaymentsByParty = new Map<number, PaymentRowForVoucherDate[]>();
 
   const customerPayOr: object[] = [];
   if (customerCreditRefs.size > 0) {
@@ -294,10 +302,12 @@ export async function computeMonthlyPartyNetsUsingVoucherDates(
             OR: customerPayOr,
           },
           select: {
+            id: true,
             fromCustomerId: true,
             reference: true,
             invoice: true,
             date: true,
+            amount: true,
           },
           orderBy: { date: "desc" },
         })
@@ -310,10 +320,12 @@ export async function computeMonthlyPartyNetsUsingVoucherDates(
             OR: vendorPayOr,
           },
           select: {
+            id: true,
             toVendorId: true,
             reference: true,
             invoice: true,
             date: true,
+            amount: true,
           },
           orderBy: { date: "desc" },
         })
@@ -323,22 +335,30 @@ export async function computeMonthlyPartyNetsUsingVoucherDates(
   for (const p of customerPayments) {
     if (!p.fromCustomerId || !p.date) continue;
     const cid = p.fromCustomerId;
-    if (p.reference && !customerPaymentByRef.has(`${cid}:${p.reference}`)) {
-      customerPaymentByRef.set(`${cid}:${p.reference}`, p.date);
-    }
-    if (p.invoice && !customerPaymentByInv.has(`${cid}:${p.invoice}`)) {
-      customerPaymentByInv.set(`${cid}:${p.invoice}`, p.date);
-    }
+    const row: PaymentRowForVoucherDate = {
+      id: p.id,
+      date: p.date,
+      amount: p.amount,
+      invoice: p.invoice,
+      reference: p.reference,
+    };
+    const list = customerPaymentsByParty.get(cid) ?? [];
+    list.push(row);
+    customerPaymentsByParty.set(cid, list);
   }
   for (const p of vendorPayments) {
     if (!p.toVendorId || !p.date) continue;
     const vid = p.toVendorId;
-    if (p.reference && !vendorPaymentByRef.has(`${vid}:${p.reference}`)) {
-      vendorPaymentByRef.set(`${vid}:${p.reference}`, p.date);
-    }
-    if (p.invoice && !vendorPaymentByInv.has(`${vid}:${p.invoice}`)) {
-      vendorPaymentByInv.set(`${vid}:${p.invoice}`, p.date);
-    }
+    const row: PaymentRowForVoucherDate = {
+      id: p.id,
+      date: p.date,
+      amount: p.amount,
+      invoice: p.invoice,
+      reference: p.reference,
+    };
+    const list = vendorPaymentsByParty.get(vid) ?? [];
+    list.push(row);
+    vendorPaymentsByParty.set(vid, list);
   }
 
   const customerByParty = new Map<number, LedgerTxn[]>();
@@ -375,9 +395,7 @@ export async function computeMonthlyPartyNetsUsingVoucherDates(
         t,
         creditNotesMap,
         invoicesMap,
-        customerPaymentByRef,
-        customerPaymentByInv,
-        customerId
+        customerPaymentsByParty.get(customerId) ?? []
       ),
     }));
     withV.sort(compareCustomerVoucherOrder);
@@ -392,9 +410,7 @@ export async function computeMonthlyPartyNetsUsingVoucherDates(
         t,
         debitNotesMap,
         invoicesMap,
-        vendorPaymentByRef,
-        vendorPaymentByInv,
-        vendorId
+        vendorPaymentsByParty.get(vendorId) ?? []
       ),
     }));
     withV.sort(compareVendorVoucherOrder);
