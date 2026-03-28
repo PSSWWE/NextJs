@@ -377,9 +377,10 @@ export default function CustomerTransactionsPage() {
       console.error('Error fetching assets:', error);
     }
 
-    // Open with current URL context so browser print headers/footers
-    // are not based on about:blank.
-    const printWindow = window.open(window.location.href, '_blank');
+    const printSourcePath =
+      window.location.pathname + window.location.search + window.location.hash;
+
+    const printWindow = window.open("", "_blank");
     if (printWindow) {
       const formatDateRange = () => {
         if (dateRange?.from && dateRange?.to) {
@@ -680,8 +681,14 @@ export default function CustomerTransactionsPage() {
         </html>
       `;
       
+      printWindow.document.open();
       printWindow.document.write(tableHTML);
       printWindow.document.close();
+      try {
+        printWindow.history.replaceState(null, "", printSourcePath);
+      } catch {
+        /* ignore */
+      }
       
       // Wait for images to load before printing
       await waitForImages(tableHTML);
