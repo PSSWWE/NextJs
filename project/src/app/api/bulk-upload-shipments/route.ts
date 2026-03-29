@@ -6,7 +6,6 @@ import {
   generateVendorInvoiceNumber, 
   addCustomerTransaction, 
   addVendorTransaction, 
-  addCompanyTransaction, 
   createJournalEntryForTransaction,
   getCountryNameFromCode 
 } from "@/lib/utils";

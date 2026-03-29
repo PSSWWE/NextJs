@@ -171,54 +171,6 @@ export async function addVendorTransaction(
   return { previousBalance, newBalance };
 }
 
-export async function addCompanyTransaction(
-  prisma: any,
-  type: 'CREDIT' | 'DEBIT',
-  amount: number,
-  description: string,
-  reference?: string,
-  invoice?: string
-) {
-  // Get or create company account
-  let companyAccount = await prisma.companyAccount.findFirst();
-  
-  if (!companyAccount) {
-    companyAccount = await prisma.companyAccount.create({
-      data: {
-        name: "Main Company Account",
-        currentBalance: 0
-      }
-    });
-  }
-
-  const previousBalance = companyAccount.currentBalance;
-  const newBalance = type === 'CREDIT' 
-    ? previousBalance + amount 
-    : previousBalance - amount;
-
-  // Update company balance
-  await prisma.companyAccount.update({
-    where: { id: companyAccount.id },
-    data: { currentBalance: newBalance }
-  });
-
-  // Create transaction record
-  await prisma.companyTransaction.create({
-    data: {
-      accountId: companyAccount.id,
-      type,
-      amount,
-      description,
-      reference,
-      invoice,
-      previousBalance,
-      newBalance
-    }
-  });
-
-  return { previousBalance, newBalance };
-}
-
 // Invoice balance update utilities
 export async function updateInvoiceBalance(
   prisma: any,

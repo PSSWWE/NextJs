@@ -169,11 +169,6 @@ const Sidebar = ({ isOpen }: { isOpen: boolean }) => {
       icon: BookOpen,
     },
     {
-      href: "/dashboard/accounts/company",
-      label: "Company Account",
-      icon: Building2,
-    },
-    {
       href: "/dashboard/journal-entries",
       label: "Journal Entries",
       icon: Book,

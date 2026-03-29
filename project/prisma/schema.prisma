@@ -3,495 +3,406 @@ generator client {
 }
 
 datasource db {
-  // provider = "postgresql"
-  provider = "mysql"  // <-- Change this from postgresql
-  url = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
   relationMode = "prisma"
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("USER") // ADMIN, USER, MANAGER, etc.
-  status    String   @default("PENDING") // PENDING, ACTIVE, INACTIVE, SUSPENDED
-  isApproved Boolean @default(false)
-  approvedAt DateTime?
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(255)
+  email      String    @unique(map: "email") @db.VarChar(255)
+  password   String    @db.VarChar(255)
+  createdAt  DateTime? @default(now()) @db.DateTime(0)
+  approvedAt DateTime? @db.DateTime(0)
   approvedBy Int?
-  createdAt DateTime @default(now())
+  isApproved Boolean?  @default(false)
+  role       String?   @default("USER") @db.VarChar(50)
+  status     String?   @default("PENDING") @db.VarChar(50)
 }
 
 model Shipment {
-  id                Int      @id @default(autoincrement())
-  trackingId        String   @unique
-  invoiceNumber     String   @unique
-  referenceNumber   String   
-  
-  // Basic form fields
-  agency            String?
-  office            String?
-  senderName        String
-  senderAddress     String
-  recipientName     String
-  recipientAddress  String
-  destination       String
-  
-  // Shipping details
-  deliveryTime      String?
-  invoiceStatus     String?
-  deliveryStatus    String?
-  trackingStatus    String?   // Legacy current status; prefer last entry in trackingStatusHistory
-  trackingStatusHistory Json? // [{ status, timestamp (ISO), description }] – full history for public tracking
-  shippingMode      String?
-  packaging         String?
-  vendor            String?
-  serviceMode       String?
-  
-  // Package information
-  amount            Int      @default(1)
-  packageDescription String?
-  weight            Float    @default(0)
-  length            Float    @default(0)
-  width             Float    @default(0)
-  height            Float    @default(0)
-  weightVol         Float    @default(0)
-  fixedCharge       Float    @default(0)
-  decValue          Float    @default(0)
-  
-  // Pricing information
-  price             Float    @default(0)
-  discount          Float    @default(0)
-  fuelSurcharge     Float    @default(0)
-  insurance         Float    @default(0)
-  customs           Float    @default(0)
-  tax               Float    @default(0)
-  declaredValue     Float    @default(0)
-  reissue           Float    @default(0)
-  profitPercentage  Float    @default(0)
-  cos               Float    @default(0) // Cost of Service
-  
-  // Calculated values
-  totalCost         Float
-  subtotal          Float    @default(0)
-
-  // Metadata
-  manualRate        Boolean  @default(false)
-  totalPackages     Int      @default(0)
-  totalWeight       Float    @default(0)
-  totalWeightVol    Float    @default(0)
-  
-  // Date fields
-  shipmentDate      DateTime @default(now())
-  
-  // JSON fields for complex data
-  packages          Json?    // Array of package objects
-  packageTotals     Json?    // Totals object
-  calculatedValues  Json?    // Calculated values object
-  
-  createdAt         DateTime @default(now())
-  
-  // Relations
-  invoices          Invoice[]
+  id                    Int       @id @default(autoincrement())
+  trackingId            String?   @unique(map: "Shipment_trackingId_key") @db.VarChar(255)
+  invoiceNumber         String?   @unique(map: "Shipment_invoiceNumber_key") @db.VarChar(255)
+  referenceNumber       String?   @db.VarChar(255)
+  agency                String?   @db.VarChar(255)
+  office                String?   @db.VarChar(255)
+  senderName            String?   @db.VarChar(255)
+  senderAddress         String?   @db.Text
+  recipientName         String?   @db.VarChar(255)
+  recipientAddress      String?   @db.Text
+  destination           String?   @db.VarChar(255)
+  deliveryTime          String?   @db.VarChar(255)
+  invoiceStatus         String?   @db.VarChar(255)
+  deliveryStatus        String?   @db.VarChar(255)
+  trackingStatus        String?   @db.VarChar(255)
+  trackingStatusHistory String?   @db.LongText
+  shippingMode          String?   @db.VarChar(255)
+  packaging             String?   @db.VarChar(255)
+  vendor                String?   @db.VarChar(255)
+  serviceMode           String?   @db.VarChar(255)
+  amount                Int?      @default(1)
+  packageDescription    String?   @db.Text
+  weight                Float?    @default(0)
+  length                Float?    @default(0)
+  width                 Float?    @default(0)
+  height                Float?    @default(0)
+  weightVol             Float?    @default(0)
+  fixedCharge           Decimal?  @default(0.00) @db.Decimal(15, 2)
+  decValue              Decimal?  @default(0.00) @db.Decimal(15, 2)
+  price                 Decimal?  @default(0.00) @db.Decimal(15, 2)
+  discount              Decimal?  @default(0.00) @db.Decimal(15, 2)
+  fuelSurcharge         Decimal?  @default(0.00) @db.Decimal(15, 2)
+  insurance             Decimal?  @default(0.00) @db.Decimal(15, 2)
+  customs               Decimal?  @default(0.00) @db.Decimal(15, 2)
+  tax                   Decimal?  @default(0.00) @db.Decimal(15, 2)
+  declaredValue         Decimal?  @default(0.00) @db.Decimal(15, 2)
+  reissue               Decimal?  @default(0.00) @db.Decimal(15, 2)
+  profitPercentage      Float?    @default(0)
+  cos                   Decimal?  @default(0.00) @db.Decimal(15, 2)
+  totalCost             Decimal?  @db.Decimal(15, 2)
+  subtotal              Decimal?  @default(0.00) @db.Decimal(15, 2)
+  manualRate            Boolean?  @default(false)
+  totalPackages         Int?      @default(0)
+  totalWeight           Float?    @default(0)
+  totalWeightVol        Float?    @default(0)
+  shipmentDate          DateTime? @db.DateTime(0)
+  packages              String?   @db.LongText
+  packageTotals         String?   @db.LongText
+  calculatedValues      String?   @db.LongText
+  createdAt             DateTime? @default(now()) @db.DateTime(0)
+  invoices              Invoice[]
 }
 
 model Customers {
-  id                Int      @id @default(autoincrement()) 
-  CompanyName       String  @unique
-  PersonName        String
-  Email             String   
-  Phone             String
-  DocumentType      String
-  DocumentNumber    String
-  DocumentExpiry    String?
-  Country           String
-  State             String
-  City              String
-  Zip               String
-  Address           String
-  ActiveStatus      String
-  FilePath          String   
-  createdAt         DateTime @default(now())
-  
-  // Financial fields
-  currentBalance    Float    @default(0)
-  creditLimit       Float    @default(0)
-  
-  // Relations
-  invoices          Invoice[]
-  transactions      CustomerTransaction[]
-  creditNotes       CreditNote[]
+  id             Int                   @id @default(autoincrement())
+  CompanyName    String                @unique(map: "CompanyName") @db.VarChar(255)
+  PersonName     String                @db.VarChar(255)
+  Email          String                @db.VarChar(255)
+  Phone          String                @db.VarChar(255)
+  DocumentType   String                @db.VarChar(255)
+  DocumentNumber String                @db.VarChar(255)
+  Country        String                @db.VarChar(255)
+  State          String                @db.VarChar(255)
+  City           String                @db.VarChar(255)
+  Zip            String                @db.VarChar(255)
+  Address        String                @db.Text
+  ActiveStatus   String                @db.VarChar(255)
+  FilePath       String                @db.Text
+  createdAt      DateTime?             @default(now()) @db.DateTime(0)
+  currentBalance Decimal?              @default(0.00) @db.Decimal(15, 2)
+  creditLimit    Decimal?              @default(0.00) @db.Decimal(15, 2)
+  DocumentExpiry String?               @db.VarChar(255)
+  invoices       Invoice[]
+  transactions   CustomerTransaction[]
+  creditNotes    CreditNote[]
 }
 
-
 model Vendors {
-  id                Int      @id @default(autoincrement()) 
-  CompanyName       String  @unique
-  PersonName        String
-  Email             String   
-  Phone             String
-  Country           String
-  State             String
-  City              String
-  Zip               String
-  Address           String
-  createdAt         DateTime @default(now())
-  
-  // Financial fields
-  currentBalance    Float    @default(0)
-  creditLimit       Float    @default(0)
-  
-  // Relations
-  invoices          Invoice[]
-  transactions      VendorTransaction[]
-  debitNotes        DebitNote[]
+  id             Int                 @id @default(autoincrement())
+  CompanyName    String              @unique(map: "CompanyName") @db.VarChar(255)
+  PersonName     String              @db.VarChar(255)
+  Email          String              @db.VarChar(255)
+  Phone          String              @db.VarChar(255)
+  Country        String              @db.VarChar(255)
+  State          String              @db.VarChar(255)
+  City           String              @db.VarChar(255)
+  Zip            String              @db.VarChar(255)
+  Address        String              @db.Text
+  createdAt      DateTime?           @default(now()) @db.DateTime(0)
+  currentBalance Decimal?            @default(0.00) @db.Decimal(15, 2)
+  creditLimit    Decimal?            @default(0.00) @db.Decimal(15, 2)
+  invoices       Invoice[]
+  transactions   VendorTransaction[]
+  debitNotes     DebitNote[]
 }
 
 model Recipients {
-  id                  Int      @id @default(autoincrement()) 
-  CompanyName         String   @unique
-  PersonName          String
-  Email               String   
-  Phone               String
-  Country             String
-  State               String
-  City                String
-  Zip                 String
-  Address             String
-  isRemoteArea        Boolean  @default(false)
-  remoteAreaCompanies String?  // JSON array of company names
-  createdAt           DateTime @default(now())
+  id                  Int       @id @default(autoincrement())
+  CompanyName         String?   @unique(map: "Recipients_CompanyName_key") @db.VarChar(255)
+  PersonName          String?   @db.VarChar(255)
+  Email               String?   @db.VarChar(255)
+  Phone               String?   @db.VarChar(255)
+  Country             String?   @db.VarChar(255)
+  State               String?   @db.VarChar(255)
+  City                String?   @db.VarChar(255)
+  Zip                 String?   @db.VarChar(255)
+  Address             String?   @db.Text
+  isRemoteArea        Boolean?  @default(false)
+  remoteAreaCompanies String?   @db.LongText
+  createdAt           DateTime? @default(now()) @db.DateTime(0)
 }
 
 model DeliveryTime {
-  id        Int   @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model Agency {
-  id        Int   @id @default(autoincrement())
-  code      String   @unique
-  name      String
+  id        Int      @id @default(autoincrement())
+  code      String   @unique(map: "Agency_code_key") @db.VarChar(255)
+  name      String   @db.VarChar(255)
   createdAt DateTime @default(now())
 }
 
 model Office {
-  id        Int   @id @default(autoincrement())
-  code      String   @unique
-  name      String
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  code      String    @unique(map: "code") @db.VarChar(255)
+  name      String    @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model InvoiceStatus {
-  id        Int   @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model DeliveryStatus {
-  id        Int   @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model ShippingMode {
-  id        Int   @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model PackagingType {
-  id        Int   @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
-
 model ServiceMode {
-  id        Int   @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String    @unique(map: "name") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model Zone {
-  id        Int   @id @default(autoincrement())
-  code      String
-  country   String
-  zone      String
-  service   String
-  phoneCode String?
+  id        Int     @id @default(autoincrement())
+  code      String  @db.VarChar(255)
+  country   String  @db.VarChar(255)
+  zone      String  @db.VarChar(255)
+  service   String  @db.VarChar(255)
+  phoneCode String? @db.VarChar(255)
 }
 
 model ZoneUpload {
-  id        Int      @id @default(autoincrement())
-  service   String   @unique
-  uploadedAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  service    String    @unique(map: "service") @db.VarChar(255)
+  uploadedAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model RemoteArea {
-  id        Int      @id @default(autoincrement())
-  company   String
-  country   String
-  iataCode  String
-  low       String
-  high      String
-  city      String?
-  filename  String?
-  uploadedAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  company    String    @db.VarChar(255)
+  country    String    @db.VarChar(255)
+  iataCode   String    @db.VarChar(255)
+  low        String    @db.VarChar(255)
+  high       String    @db.VarChar(255)
+  city       String?   @db.VarChar(255)
+  filename   String?   @db.VarChar(255)
+  uploadedAt DateTime? @default(now()) @db.DateTime(0)
 }
 
 model Rate {
-  id         Int     @id @default(autoincrement())
-  weight     Float
-  vendor    String
-  service   String
-  zone       String  // e.g. "1", "7", "7A", "7B", "5A"
-  price      Int
-  docType    String
+  id      Int    @id @default(autoincrement())
+  weight  Float
+  vendor  String @db.VarChar(255)
+  service String @db.VarChar(255)
+  zone    String @db.VarChar(255)
+  price   Int
+  docType String @db.VarChar(255)
 }
 
 model filename {
-  id Int @id @default(autoincrement())
-  filename String
-  vendor String
-  service String
-  fileType String // "rate" or "zone"
-  uploadedAt DateTime @default(now())
-  
-  @@unique([service, fileType])
+  id         Int       @id @default(autoincrement())
+  filename   String    @db.VarChar(255)
+  vendor     String    @db.VarChar(255)
+  service    String    @db.VarChar(255)
+  fileType   String    @db.VarChar(255)
+  uploadedAt DateTime? @default(now()) @db.DateTime(0)
+
+  @@unique([service, fileType], map: "unique_service_fileType")
 }
 
-// Customer Transaction History
 model CustomerTransaction {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   customerId      Int
+  type            String    @db.VarChar(50)
+  amount          Decimal   @db.Decimal(15, 2)
+  description     String    @db.Text
+  reference       String?   @db.VarChar(255)
+  invoice         String?   @db.VarChar(255)
+  previousBalance Decimal   @db.Decimal(15, 2)
+  newBalance      Decimal   @db.Decimal(15, 2)
+  createdAt       DateTime? @default(now()) @db.DateTime(0)
   customer        Customers @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  type            String   // "CREDIT", "DEBIT"
-  amount          Float
-  description     String
-  reference       String?  // Payment reference, etc.
-  invoice         String?  // Invoice number
-  
-  // Balance tracking
-  previousBalance Float
-  newBalance      Float
-  
-  createdAt       DateTime @default(now())
-  
-  @@index([customerId])
-  @@index([createdAt])
+
+  @@index([createdAt], map: "idx_createdAt")
+  @@index([customerId], map: "idx_customerId")
 }
 
-// Vendor Transaction History
 model VendorTransaction {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   vendorId        Int
-  vendor          Vendors @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  
-  type            String   // "CREDIT", "DEBIT"
-  amount          Float
-  description     String
-  reference       String?  // Payment reference, etc.
-  invoice         String?  // Invoice number
-  
-  // Balance tracking
-  previousBalance Float
-  newBalance      Float
-  
-  createdAt       DateTime @default(now())
-  
-  @@index([vendorId])
-  @@index([createdAt])
+  type            String    @db.VarChar(50)
+  amount          Decimal   @db.Decimal(15, 2)
+  description     String    @db.Text
+  reference       String?   @db.VarChar(255)
+  invoice         String?   @db.VarChar(255)
+  previousBalance Decimal   @db.Decimal(15, 2)
+  newBalance      Decimal   @db.Decimal(15, 2)
+  createdAt       DateTime? @default(now()) @db.DateTime(0)
+  vendor          Vendors   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt], map: "idx_createdAt")
+  @@index([vendorId], map: "idx_vendorId")
 }
 
-model vendorservice{
-  id Int @id @default(autoincrement())
-  vendor String
-  service String
-}
-
-/// Accounts module: Payments
-enum TransactionType {
-  INCOME
-  EXPENSE
-  TRANSFER
-  ADJUSTMENT
-  EQUITY
-}
-
-enum PartyType {
-  US
-  CUSTOMER
-  VENDOR
-}
-
-enum PaymentMode {
-  CASH
-  BANK_TRANSFER
-  CARD
-  CHEQUE
+model vendorservice {
+  id      Int    @id @default(autoincrement())
+  vendor  String @db.VarChar(255)
+  service String @db.VarChar(255)
 }
 
 model Payment {
-  id              Int              @id @default(autoincrement())
-  transactionType TransactionType
-  category        String
-  date            DateTime
-  amount          Float
-
-  // From: Customer or Us
-  fromPartyType   PartyType
+  id              Int       @id @default(autoincrement())
+  transactionType String    @db.VarChar(50)
+  category        String    @db.VarChar(255)
+  date            DateTime  @db.DateTime(0)
+  amount          Decimal   @db.Decimal(15, 2)
+  fromPartyType   String    @db.VarChar(50)
   fromCustomerId  Int?
-  fromCustomer    String
-
-  // To: Vendor or Us
-  toPartyType     PartyType
+  fromCustomer    String    @db.VarChar(255)
+  toPartyType     String    @db.VarChar(50)
   toVendorId      Int?
-  toVendor        String
-
-  mode            PaymentMode?
-  reference       String?
-  invoice         String?
-  description     String?
-
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  toVendor        String    @db.VarChar(255)
+  mode            String?   @db.VarChar(50)
+  reference       String?   @db.VarChar(255)
+  invoice         String?   @db.VarChar(255)
+  description     String?   @db.Text
+  createdAt       DateTime? @default(now()) @db.DateTime(0)
+  updatedAt       DateTime? @default(now()) @updatedAt @db.DateTime(0)
 }
 
 model Invoice {
-  id              Int      @id @default(autoincrement())
-  invoiceNumber   String   @unique
-  invoiceDate     DateTime
-  receiptNumber   String?
-  trackingNumber  String?
-  destination     String
-  dayWeek         String?  // D/W field
-  weight          Float
-  profile         String   // Profile dropdown
-  fscCharges      Float    @default(0)
-  discount        Float    @default(0)
-  
-  // Line items as JSON
-  lineItems       Json     // Array of { description: string, value: number }
-  
-  // Customer, vendor and shipment info
-  customerId      Int?
-  customer        Customers? @relation(fields: [customerId], references: [id])
-  vendorId        Int?
-  vendor          Vendors? @relation(fields: [vendorId], references: [id])
-  shipmentId      Int?
-  shipment        Shipment? @relation(fields: [shipmentId], references: [id])
-  
-  // Additional fields
-  disclaimer      String?  // Editable disclaimer text
-  
-  // Status and metadata
-  status          String   @default("Unpaid") // Unpaid, Paid, Overdue, Cancelled
-  totalAmount     Float
-  currency        String   @default("USD")
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
-  debitNotes      DebitNote[]
-  creditNotes     CreditNote[]
+  id             Int          @id @default(autoincrement())
+  invoiceNumber  String       @unique(map: "invoiceNumber") @db.VarChar(255)
+  invoiceDate    DateTime     @db.DateTime(0)
+  receiptNumber  String?      @db.VarChar(255)
+  trackingNumber String?      @db.VarChar(255)
+  destination    String       @db.VarChar(255)
+  dayWeek        String?      @db.VarChar(255)
+  weight         Float
+  profile        String       @db.VarChar(255)
+  fscCharges     Decimal?     @default(0.00) @db.Decimal(15, 2)
+  lineItems      String       @db.LongText
+  customerId     Int?
+  vendorId       Int?
+  shipmentId     Int?
+  disclaimer     String?      @db.Text
+  status         String?      @default("Unpaid") @db.VarChar(50)
+  totalAmount    Decimal      @db.Decimal(15, 2)
+  currency       String?      @default("USD") @db.VarChar(10)
+  createdAt      DateTime?    @default(now()) @db.DateTime(0)
+  updatedAt      DateTime?    @default(now()) @updatedAt @db.DateTime(0)
+  discount       Decimal?     @default(0.00) @db.Decimal(15, 2)
+  customer       Customers?   @relation(fields: [customerId], references: [id])
+  vendor         Vendors?     @relation(fields: [vendorId], references: [id])
+  shipment       Shipment?    @relation(fields: [shipmentId], references: [id])
+  debitNotes     DebitNote[]
+  creditNotes    CreditNote[]
 }
 
 model DebitNote {
-  id              Int      @id @default(autoincrement())
-  debitNoteNumber String   @unique
-  billId          Int?     // Reference to the original bill/invoice
-  bill            Invoice? @relation(fields: [billId], references: [id])
+  id              Int       @id @default(autoincrement())
+  debitNoteNumber String    @unique(map: "debitNoteNumber") @db.VarChar(255)
+  billId          Int?
   vendorId        Int?
-  vendor          Vendors? @relation(fields: [vendorId], references: [id])
-  amount          Float
-  date            DateTime
-  description     String?
-  currency        String   @default("USD")
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  amount          Decimal   @db.Decimal(15, 2)
+  date            DateTime  @db.DateTime(0)
+  description     String?   @db.Text
+  currency        String?   @default("USD") @db.VarChar(10)
+  createdAt       DateTime? @default(now()) @db.DateTime(0)
+  updatedAt       DateTime? @default(now()) @updatedAt @db.DateTime(0)
+  bill            Invoice?  @relation(fields: [billId], references: [id])
+  vendor          Vendors?  @relation(fields: [vendorId], references: [id])
 }
 
 model CreditNote {
-  id               Int      @id @default(autoincrement())
-  creditNoteNumber String   @unique
-  invoiceId        Int?     // Reference to the original customer invoice
-  invoice          Invoice? @relation(fields: [invoiceId], references: [id])
-  customerId       Int?
-  customer         Customers? @relation(fields: [customerId], references: [id])
+  id               Int        @id @default(autoincrement())
+  creditNoteNumber String     @unique(map: "CreditNote_creditNoteNumber_key") @db.VarChar(255)
+  invoiceId        Int
+  customerId       Int
   amount           Float
-  date             DateTime
-  description      String?
-  currency         String   @default("USD")
-  
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  date             DateTime   @db.DateTime(0)
+  description      String     @db.VarChar(255)
+  currency         String     @db.VarChar(255)
+  createdAt        DateTime   @default(now()) @db.DateTime(0)
+  updatedAt        DateTime   @default(now()) @updatedAt @db.DateTime(0)
+  invoice          Invoice?   @relation(fields: [invoiceId], references: [id])
+  customer         Customers? @relation(fields: [customerId], references: [id])
 }
 
-// Chart of Accounts Models
 model ChartOfAccount {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  accountName String
-  category    String   // Asset, Liability, Equity, Expense, Revenue
-  type        String   // Current Asset, Fixed Asset, Current Liability, etc.
-  debitRule   String   // "Increases" or "Decreases"
-  creditRule  String   // "Increases" or "Decreases"
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  journalLines   JournalEntryLine[]
+  id           Int                @id @default(autoincrement())
+  code         String             @unique(map: "ChartOfAccount_code_key") @db.VarChar(255)
+  accountName  String             @db.VarChar(255)
+  category     String             @db.VarChar(255)
+  type         String             @db.VarChar(255)
+  debitRule    String             @db.VarChar(255)
+  creditRule   String             @db.VarChar(255)
+  description  String             @db.VarChar(255)
+  isActive     Boolean
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @default(now()) @updatedAt
+  journalLines JournalEntryLine[]
 }
 
 model JournalEntry {
-  id              Int      @id @default(autoincrement())
-  entryNumber     String   @unique
-  date            DateTime
-  description     String
-  reference       String?
-  totalDebit      Float
-  totalCredit     Float
-  isPosted        Boolean  @default(false)
-  postedAt        DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // Relations
-  lines     JournalEntryLine[]
+  id          Int                @id @default(autoincrement())
+  entryNumber String             @unique(map: "entryNumber") @db.VarChar(255)
+  date        DateTime           @db.DateTime(0)
+  description String             @db.Text
+  reference   String?            @db.VarChar(255)
+  totalDebit  Decimal            @db.Decimal(15, 2)
+  totalCredit Decimal            @db.Decimal(15, 2)
+  isPosted    Boolean?           @default(false)
+  postedAt    DateTime?          @db.DateTime(0)
+  createdAt   DateTime?          @default(now()) @db.DateTime(0)
+  updatedAt   DateTime?          @default(now()) @updatedAt @db.DateTime(0)
+  lines       JournalEntryLine[]
 }
 
 model JournalEntryLine {
-  id              Int      @id @default(autoincrement())
-  journalEntryId  Int
-  accountId       Int
-  debitAmount     Float    @default(0)
-  creditAmount    Float    @default(0)
-  description     String?
-  reference       String?
-  createdAt       DateTime @default(now())
-
-  // Relations
-  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  account      ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id             Int            @id @default(autoincrement())
+  journalEntryId Int
+  accountId      Int
+  debitAmount    Decimal?       @default(0.00) @db.Decimal(15, 2)
+  creditAmount   Decimal?       @default(0.00) @db.Decimal(15, 2)
+  description    String?        @db.Text
+  reference      String?        @db.VarChar(255)
+  createdAt      DateTime?      @default(now()) @db.DateTime(0)
+  journalEntry   JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model FixedCharge {
-  id          Int      @id @default(autoincrement())
-  weight      Float    // Weight in kg (0.5, 1.0, 1.5, etc.)
-  fixedCharge Float    // Fixed charge amount (1500, 1550, 1600, etc.)
-  createdAt   DateTime @default(now())
+  id          Int       @id @default(autoincrement())
+  weight      Float
+  fixedCharge Decimal   @db.Decimal(15, 2)
+  createdAt   DateTime? @default(now()) @db.DateTime(0)
 }
 
-// Key/value settings (e.g. global feature flags). Survives serverless restarts.
+/// Key-value settings (expect primary key on `key` in MySQL).
 model AppSetting {
-  key   String @id
-  value String
+  key   String @id @db.VarChar(255)
+  value String @db.VarChar(255)
 }

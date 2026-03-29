@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateInvoiceNumber, generateVendorInvoiceNumber, addCustomerTransaction, addVendorTransaction, addCompanyTransaction, createJournalEntryForTransaction } from "@/lib/utils";
+import { generateInvoiceNumber, generateVendorInvoiceNumber, addCustomerTransaction, addVendorTransaction, createJournalEntryForTransaction } from "@/lib/utils";
 
 /**
  * POST /api/add-shipment
@@ -707,16 +707,6 @@ export async function POST(req: NextRequest) {
             shipmentDate ? new Date(shipmentDate) : new Date()
           );
 
-          // // Create CREDIT transaction for company (we receive money)
-          // await addCompanyTransaction(
-          //   prisma,
-          //   'DEBIT',
-          //   appliedBalance,
-          //   `Customer credit applied for invoice ${invoiceNumber}`,
-          //   `CREDIT-${invoiceNumber}`,
-          //   invoiceNumber
-          // );
-
           // // Create journal entry for company debit transaction
           // await createJournalEntryForTransaction(
           //   prisma,
@@ -812,16 +802,6 @@ export async function POST(req: NextRequest) {
             vendorInvoiceNumber,
             shipmentDate ? new Date(shipmentDate) : new Date()
           );
-
-          // Create CREDIT transaction for company (reduces our liability)
-          // await addCompanyTransaction(
-          //   prisma,
-          //   'CREDIT',
-          //   vendorAppliedBalance,
-          //   `Vendor credit applied for invoice ${vendorInvoiceNumber}`,
-          //   `CREDIT-${vendorInvoiceNumber}`,
-          //   vendorInvoiceNumber
-          // );
 
           // // Create journal entry for company credit transaction
           // await createJournalEntryForTransaction(
