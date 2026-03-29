@@ -3,10 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // provider = "postgresql"
+  provider = "mysql"  // <-- Change this from postgresql
+  url = env("DATABASE_URL")
   // directUrl = env("DIRECT_URL")
-  // Connection pooling for Vercel
   relationMode = "prisma"
 }
 
@@ -263,18 +263,6 @@ model filename {
   @@unique([service, fileType])
 }
 
-// Company Account for tracking our own balance
-model CompanyAccount {
-  id              Int      @id @default(autoincrement())
-  name            String   @default("Main Company Account")
-  currentBalance  Float    @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
-  transactions    CompanyTransaction[]
-}
-
 // Customer Transaction History
 model CustomerTransaction {
   id              Int      @id @default(autoincrement())
@@ -316,28 +304,6 @@ model VendorTransaction {
   createdAt       DateTime @default(now())
   
   @@index([vendorId])
-  @@index([createdAt])
-}
-
-// Company Transaction History
-model CompanyTransaction {
-  id              Int           @id @default(autoincrement())
-  accountId       Int
-  account         CompanyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  
-  type            String        // "CREDIT", "DEBIT"
-  amount          Float
-  description     String
-  reference       String?       // Payment reference, etc.
-  invoice         String?       // Invoice number
-  
-  // Balance tracking
-  previousBalance Float
-  newBalance      Float
-  
-  createdAt       DateTime @default(now())
-  
-  @@index([accountId])
   @@index([createdAt])
 }
 
