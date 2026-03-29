@@ -64,18 +64,7 @@ const ISO_NUM_TO_ISO2: Record<string, string> = {
   "894":"ZM","716":"ZW","275":"PS","-99":"XK",
 };
 
-const PALETTE = ["#fde68a", "#fdba74", "#fb923c", "#f97316", "#ea580c", "#dc2626", "#b91c1c"];
-
-function colorForRatio(ratio: number): string {
-  if (ratio > 0.85) return PALETTE[6];
-  if (ratio > 0.7) return PALETTE[5];
-  if (ratio > 0.55) return PALETTE[4];
-  if (ratio > 0.4) return PALETTE[3];
-  if (ratio > 0.25) return PALETTE[2];
-  if (ratio > 0.1) return PALETTE[1];
-  if (ratio > 0) return PALETTE[0];
-  return "#e5e7eb";
-}
+const PALETTE = ["#3b82f6", "#22c55e", "#f59e0b", "#a855f7", "#ef4444"];
 
 const ANTARCTICA_ID = "010";
 
@@ -134,10 +123,29 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
     return out;
   }, [data]);
 
-  const maxRevenue = useMemo(
-    () => Math.max(1, ...Object.values(revenueByIso2).map((v) => v.revenue)),
-    [revenueByIso2]
-  );
+  const colorByIso2 = useMemo(() => {
+    const byIso: Record<string, string> = {};
+    const entries = Object.entries(revenueByIso2).filter(([, v]) => v.shipments > 0);
+
+    const positives = entries
+      .filter(([, v]) => v.revenue > 0)
+      .sort((a, b) => a[1].revenue - b[1].revenue);
+
+    const denom = Math.max(1, positives.length - 1);
+    positives.forEach(([iso], idx) => {
+      const bucket = Math.round((idx / denom) * (PALETTE.length - 1));
+      byIso[iso] = PALETTE[bucket];
+    });
+
+    // Shipments with zero revenue still get a visible color.
+    entries
+      .filter(([iso, v]) => !byIso[iso] && v.shipments > 0)
+      .forEach(([iso]) => {
+        byIso[iso] = "#a3e635";
+      });
+
+    return byIso;
+  }, [revenueByIso2]);
 
   const handleZoom = useCallback((delta: number) => {
     setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z + delta)));
@@ -205,13 +213,10 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
               const numericId = f.id || "";
               const iso2 = ISO_NUM_TO_ISO2[numericId] || "";
               const entry = revenueByIso2[iso2];
-              const ratio = entry ? entry.revenue / maxRevenue : 0;
               const isSelected = selected?.iso === iso2 && iso2 !== "";
               const fill = isSelected
                 ? "#7c3aed"
-                : entry
-                  ? colorForRatio(ratio)
-                  : "#e5e7eb";
+                : colorByIso2[iso2] || "#e5e7eb";
               const d = basePath(f) || "";
 
               return (
@@ -399,13 +404,13 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
 
       {/* Legend */}
       <div className="flex items-center justify-center gap-2 mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-        <span>Low</span>
+        <span>Ranked</span>
         <div className="flex h-2.5 rounded overflow-hidden">
           {PALETTE.map((c) => (
             <div key={c} className="w-10" style={{ background: c }} />
           ))}
         </div>
-        <span>High revenue</span>
+        <span>Top revenue</span>
       </div>
     </div>
   );
