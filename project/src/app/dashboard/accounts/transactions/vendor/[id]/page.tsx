@@ -424,8 +424,8 @@ export default function VendorTransactionsPage() {
                 display: flex;
                 justify-content: space-between;
                 align-items: flex-start;
-                margin-bottom: 30px;
-                padding-bottom: 20px;
+                margin-bottom: 0;
+                padding-bottom: 0;
               }
               .logo-section {
                 display: flex;
@@ -450,7 +450,7 @@ export default function VendorTransactionsPage() {
                 font-size: 14px;
               }
               .invoice-info {
-                margin: 20px 0 0 0;
+                margin: 0;
                 display: flex;
                 justify-content: space-between;
                 border-bottom: none;
@@ -596,7 +596,7 @@ export default function VendorTransactionsPage() {
                   })()}</div>
                 </div>
               </div>
-              <hr style="border: none; border-top: 2px solid #ddd; margin: 20px 0;">
+              <hr style="border: none; border-top: 2px solid #ddd; margin: 16px 0;">
               
               ${vendorInfo}
               
@@ -1146,11 +1146,6 @@ export default function VendorTransactionsPage() {
               </div>
             </div>
           </div>
-          {loadTime !== null && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Load time: {loadTime.toFixed(0)}ms ({(loadTime / 1000).toFixed(2)}s)
-            </div>
-          )}
         </div>
 
         {/* Right side - Show, Export, Recalculate and Date Range */}
