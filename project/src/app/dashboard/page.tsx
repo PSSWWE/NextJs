@@ -453,6 +453,7 @@ const DashboardPage = () => {
                     .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
                     .slice(0, 20)}
                   onHoverCountry={setSelectedCountryIso}
+                  onClickCountry={(info) => setSelectedCountryIso(info?.iso || null)}
                 />
 
                 <div className="flex items-center justify-between text-xs sm:text-sm">
