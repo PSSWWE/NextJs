@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   BarChart3,
   LineChart,
-  PieChart,
   TrendingUp,
   TrendingDown,
   Users,
@@ -37,8 +36,6 @@ import {
   ResponsiveContainer,
   LineChart as RechartsLineChart,
   Line,
-  PieChart as RechartsPieChart,
-  Cell,
   AreaChart,
   Area,
   RadarChart,
@@ -46,12 +43,12 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  Pie,
   Legend,
 } from "recharts";
 import { Country } from "country-state-city";
 import { getCountryNameFromCode } from "@/lib/utils";
 import { getTrackingUrl } from "@/lib/tracking-links";
+import CountryRevenueMap from "@/components/CountryRevenueMap";
 
 /** Compact Y-axis for large currency-style values (e.g. 80M, 1.2B). */
 function formatAccountsTrendAxis(value: number): string {
@@ -84,13 +81,13 @@ function formatAccountsTrendAxis(value: number): string {
   return value.toLocaleString();
 }
 
+// Active slice renderer for the country pie chart: slightly larger with white border.
 const DashboardPage = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'shipments' | 'payments'>('shipments');
   const [showReceivableModal, setShowReceivableModal] = useState(false);
   const [showCustomersModal, setShowCustomersModal] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<{ name: string; percent: number } | null>(null);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [selectedCountryIso, setSelectedCountryIso] = useState<string | null>(null);
   const [data, setData] = useState({
     totalShipments: 0,
     totalUsers: 0,
@@ -190,11 +187,7 @@ const DashboardPage = () => {
             .filter((d: any) => d.destination && d.destination !== "No Data" && d.revenue > 0)
             .slice(0, 1)[0];
           if (first) {
-            const total = json.revenueByDestination
-              .filter((d: any) => d.destination && d.destination !== "No Data" && d.revenue > 0)
-              .reduce((sum: number, d: any) => sum + d.revenue, 0);
-            const percent = (first.revenue / total) * 100;
-            setSelectedCountry({ name: first.destination, percent });
+            setSelectedCountryIso(first.destination);
           }
         }
       } catch (error) {
@@ -412,10 +405,17 @@ const DashboardPage = () => {
               </h3>
               <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
             </div>
-            <ResponsiveContainer width="100%" height={280} className="sm:h-[300px]">
-              <BarChart data={data.monthlyShipments} margin={{ top: 5, right: 10, left: -20, bottom: -5 }}>
+            <ResponsiveContainer width="100%" height={340} className="sm:h-[380px]">
+              <BarChart data={data.monthlyShipments} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-                <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
+                <XAxis
+                  dataKey="month"
+                  stroke="#6B7280"
+                  fontSize={12}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
                 <YAxis yAxisId="left" stroke="#6B7280" fontSize={12} />
                 <YAxis yAxisId="right" orientation="right" stroke="#6B7280" fontSize={12} />
                 <Tooltip 
@@ -447,133 +447,49 @@ const DashboardPage = () => {
               <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
             </div>
             {data.revenueByDestination && data.revenueByDestination.length > 0 && data.revenueByDestination[0].destination !== "No Data" && (data.revenueByDestination.some(d => d.revenue > 0) || data.revenueByDestination.some(d => d.shipments > 0)) ? (
-              <div className="flex items-center gap-4">
-                <div className="flex-1 relative" style={{ minHeight: '300px' }}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RechartsPieChart>
-                      <Pie
-                        data={(() => {
-                          const pieData = data.revenueByDestination
-                            .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                            .slice(0, 12)
-                            .map((d, idx) => ({
-                              name: d.destination,
-                              value: d.revenue,
-                              shipments: d.shipments,
-                              index: idx
-                            }));
-                          const total = pieData.reduce((sum, d) => sum + d.value, 0);
-                          return pieData.map(d => ({
-                            ...d,
-                            percent: (d.value / total) * 100
-                          }));
-                        })()}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={false}
-                        outerRadius={100}
-                        innerRadius={60}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onMouseEnter={(data: any) => {
-                          if (data && data.percent !== undefined && data.index !== undefined) {
-                            setSelectedCountry({ name: data.name, percent: data.percent });
-                            setHoveredIndex(data.index);
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          setHoveredIndex(null);
-                        }}
-                      >
-                        {data.revenueByDestination
-                          .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                          .slice(0, 12)
-                          .map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={COLORS[index % COLORS.length]}
-                              opacity={hoveredIndex === null || hoveredIndex === index ? 1 : 0.3}
-                              stroke={hoveredIndex === index ? '#000' : 'none'}
-                              strokeWidth={hoveredIndex === index ? 2 : 0}
-                            />
-                          ))}
-                      </Pie>
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                  {/* Center text */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="text-center">
-                      <div className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white">
-                        {selectedCountry ? selectedCountry.name : (() => {
-                          const first = data.revenueByDestination
-                            .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                            .slice(0, 1)[0];
-                          if (first) {
-                            const total = data.revenueByDestination
-                              .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                              .reduce((sum, d) => sum + d.revenue, 0);
-                            const percent = (first.revenue / total) * 100;
-                            return first.destination;
-                          }
-                          return '';
-                        })()}
-                      </div>
-                      <div className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1">
-                        {selectedCountry ? `${selectedCountry.percent.toFixed(2)}%` : (() => {
-                          const first = data.revenueByDestination
-                            .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                            .slice(0, 1)[0];
-                          if (first) {
-                            const total = data.revenueByDestination
-                              .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                              .reduce((sum, d) => sum + d.revenue, 0);
-                            const percent = (first.revenue / total) * 100;
-                            return `${percent.toFixed(2)}%`;
-                          }
-                          return '';
-                        })()}
-                      </div>
-                    </div>
+              <div className="space-y-3">
+                <CountryRevenueMap
+                  data={data.revenueByDestination
+                    .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
+                    .slice(0, 20)}
+                  onHoverCountry={setSelectedCountryIso}
+                />
+
+                <div className="flex items-center justify-between text-xs sm:text-sm">
+                  <div className="text-gray-600 dark:text-gray-300 font-medium">
+                    {(() => {
+                      const base = data.revenueByDestination
+                        .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0);
+                      if (base.length === 0) return "Hover a country";
+                      const code = selectedCountryIso || base[0].destination;
+                      return getCountryNameFromCode(code) || code;
+                    })()}
+                  </div>
+                  <div className="text-gray-500 dark:text-gray-400">
+                    Revenue share view
                   </div>
                 </div>
-                {/* Legend on the right */}
-                <div className="shrink-0 w-48 space-y-2">
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {data.revenueByDestination
                     .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                    .slice(0, 12)
-                    .map((entry, index) => {
-                      const total = data.revenueByDestination
-                        .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                        .reduce((sum, d) => sum + d.revenue, 0);
-                      const percent = (entry.revenue / total) * 100;
-                      const countryName = getCountryNameFromCode(entry.destination);
-                      return (
-                        <div 
-                          key={index} 
-                          className="flex items-center gap-2 text-xs sm:text-sm cursor-pointer hover:opacity-80 transition-opacity"
-                          onMouseEnter={() => {
-                            setSelectedCountry({ name: entry.destination, percent });
-                            setHoveredIndex(index);
-                          }}
-                          onMouseLeave={() => {
-                            setSelectedCountry(null);
-                            setHoveredIndex(null);
-                          }}
-                        >
-                          <div 
-                            className="w-3 h-3 rounded-sm shrink-0" 
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                          />
-                          <span className="text-gray-700 dark:text-gray-300 font-medium">
-                            {countryName || entry.destination}
-                          </span>
-                          <span className="text-gray-500 dark:text-gray-400 ml-auto">
-                            ({percent.toFixed(2)} %)
-                          </span>
-                        </div>
-                      );
-                    })}
+                    .sort((a, b) => b.revenue - a.revenue)
+                    .slice(0, 6)
+                    .map((entry, index) => (
+                      <div
+                        key={`${entry.destination}-${index}`}
+                        className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs sm:text-sm"
+                        onMouseEnter={() => setSelectedCountryIso(entry.destination)}
+                        onMouseLeave={() => setSelectedCountryIso(null)}
+                      >
+                        <span className="font-medium text-gray-700 dark:text-gray-200">
+                          {getCountryNameFromCode(entry.destination) || entry.destination}
+                        </span>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {entry.revenue.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
                 </div>
               </div>
             ) : (
