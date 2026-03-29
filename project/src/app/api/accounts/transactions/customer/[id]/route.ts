@@ -159,6 +159,12 @@ export async function GET(
             City: customer.City,
             Country: customer.Country,
           },
+          metrics: {
+            grossProfit: 0,
+            totalShipments: 0,
+            avgOrderValue: 0,
+            totalSpent: 0,
+          },
           transactions: [],
           total: 0,
           page,
@@ -317,6 +323,12 @@ export async function GET(
             City: customer.City,
             Country: customer.Country,
           },
+          metrics: {
+            grossProfit: 0,
+            totalShipments: 0,
+            avgOrderValue: 0,
+            totalSpent: 0,
+          },
           transactions: [],
           total: 0,
           page,
@@ -326,6 +338,66 @@ export async function GET(
       }
 
       const total = filteredTransactionsList.length;
+
+      // Aggregate shipment/invoice metrics for the currently filtered period.
+      // We consider "shipments" as DEBIT transactions where reference == invoice.
+      let metrics = {
+        totalShipments: 0,
+        totalSpent: 0,
+        avgOrderValue: 0,
+        grossProfit: 0,
+      };
+      try {
+        const shipmentInvoiceNumbers = Array.from(
+          new Set(
+            filteredTransactionsList
+              .filter(
+                (t: any) =>
+                  t.invoice &&
+                  t.type === "DEBIT" &&
+                  t.reference &&
+                  t.reference === t.invoice
+              )
+              .map((t: any) => t.invoice as string)
+          )
+        );
+
+        if (shipmentInvoiceNumbers.length > 0) {
+          const invoicesForMetrics = await prisma.invoice.findMany({
+            where: {
+              invoiceNumber: { in: shipmentInvoiceNumbers },
+              status: { not: "Cancelled" },
+            },
+            select: {
+              totalAmount: true,
+              shipment: {
+                select: { price: true, cos: true },
+              },
+            },
+          });
+
+          const totalShipments = invoicesForMetrics.length;
+          const totalSpent = invoicesForMetrics.reduce(
+            (sum, inv) => sum + (inv.totalAmount || 0),
+            0
+          );
+          const grossProfit = invoicesForMetrics.reduce((sum, inv) => {
+            const price = inv.shipment?.price ?? 0;
+            const cos = inv.shipment?.cos ?? 0;
+            return sum + (price - cos);
+          }, 0);
+
+          metrics = {
+            totalShipments,
+            totalSpent,
+            avgOrderValue:
+              totalShipments > 0 ? totalSpent / totalShipments : 0,
+            grossProfit,
+          };
+        }
+      } catch (e) {
+        console.error("Failed to compute customer metrics:", e);
+      }
 
       const transactionIdsForSort = filteredTransactionsList.map((t) => t.id);
       const fullTransactionsForSortingList =
@@ -563,6 +635,7 @@ export async function GET(
           City: customer.City,
           Country: customer.Country,
         },
+        metrics,
         transactions: transactionsWithShipmentInfo,
         total,
         page,
@@ -909,6 +982,65 @@ export async function GET(
     // Get total count after date and search filtering
     const total = filteredTransactions.length;
 
+    // Aggregate shipment/invoice metrics for the currently filtered period.
+    let metrics = {
+      totalShipments: 0,
+      totalSpent: 0,
+      avgOrderValue: 0,
+      grossProfit: 0,
+    };
+    try {
+      const shipmentInvoiceNumbers = Array.from(
+        new Set(
+          filteredTransactions
+            .filter(
+              (t: any) =>
+                t.invoice &&
+                t.type === "DEBIT" &&
+                t.reference &&
+                t.reference === t.invoice
+            )
+            .map((t: any) => t.invoice as string)
+        )
+      );
+
+      if (shipmentInvoiceNumbers.length > 0) {
+        const invoicesForMetrics = await prisma.invoice.findMany({
+          where: {
+            invoiceNumber: { in: shipmentInvoiceNumbers },
+            status: { not: "Cancelled" },
+          },
+          select: {
+            totalAmount: true,
+            shipment: {
+              select: { price: true, cos: true },
+            },
+          },
+        });
+
+        const totalShipments = invoicesForMetrics.length;
+        const totalSpent = invoicesForMetrics.reduce(
+          (sum, inv) => sum + (inv.totalAmount || 0),
+          0
+        );
+        const grossProfit = invoicesForMetrics.reduce((sum, inv) => {
+          const price = inv.shipment?.price ?? 0;
+          const cos = inv.shipment?.cos ?? 0;
+          return sum + (price - cos);
+        }, 0);
+
+        metrics = {
+          totalShipments,
+          totalSpent,
+          avgOrderValue:
+            totalShipments > 0 ? totalSpent / totalShipments : 0,
+          grossProfit,
+        };
+      }
+    } catch (e) {
+      console.error("Failed to compute customer metrics:", e);
+    }
+
     // Fetch full transaction data for sorting
     const transactionIds = filteredTransactions.map(t => t.id);
     const fullTransactionsForSorting = await prisma.customerTransaction.findMany({
@@ -1141,6 +1273,7 @@ export async function GET(
         Country: customer.Country,
       },
       transactions: transactionsWithShipmentInfo,
+      metrics,
       total,
       page,
       limit: isAllLimit || !limit ? total : limit,

@@ -64,6 +64,17 @@ export default function CustomerTransactionsPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState<{
+    grossProfit: number;
+    totalShipments: number;
+    avgOrderValue: number;
+    totalSpent: number;
+  }>({
+    grossProfit: 0,
+    totalShipments: 0,
+    avgOrderValue: 0,
+    totalSpent: 0,
+  });
 
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -206,6 +217,14 @@ export default function CustomerTransactionsPage() {
         setCustomer(data.customer);
         setTransactions(data.transactions);
         setTotal(data.total || data.transactions.length);
+        setMetrics(
+          data.metrics || {
+            grossProfit: 0,
+            totalShipments: 0,
+            avgOrderValue: 0,
+            totalSpent: 0,
+          }
+        );
         setLoadTime(duration);
         console.log(`[Customer Transactions] Data loaded in ${duration.toFixed(2)}ms (${(duration / 1000).toFixed(2)}s)`);
       } else {
@@ -1095,26 +1114,50 @@ export default function CustomerTransactionsPage() {
           </p>
         </div>
 
-        {/* Balance Display - Top Right */}
-        <div className="text-right">
-          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-            Current Balance
+        {/* KPI tiles */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 w-auto">
+
+          <div className="w-[150px] px-3 py-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-center">
+            <div className="text-xs text-blue-700 dark:text-blue-300">
+              Total Shipments
+            </div>
+            <div className="text-lg font-bold mt-1 text-blue-900 dark:text-blue-100">
+              {metrics.totalShipments.toLocaleString()}
+            </div>
           </div>
-          <div className="text-2xl font-bold">
-            <span
-              className={
+
+
+          <div className="w-[150px] px-3 py-3 rounded-lg bg-orange-50 dark:bg-orange-950/40 text-center">
+            <div className="text-xs text-orange-700 dark:text-orange-300">
+              Total Spent
+            </div>
+            <div className="text-lg font-bold mt-1 text-orange-900 dark:text-orange-100">
+              {metrics.totalSpent.toLocaleString()}
+            </div>
+          </div>
+          <div className="w-[150px] px-3 py-3 rounded-lg bg-red-50 dark:bg-red-950/40 text-center">
+            <div className="text-xs text-red-700 dark:text-red-300">
+              Gross Profit
+            </div>
+            <div className="text-lg font-bold mt-1 text-red-900 dark:text-red-100">
+              {metrics.grossProfit.toLocaleString()}
+            </div>
+          </div>
+          <div className="w-[150px] px-3 py-3 rounded-lg bg-green-50 dark:bg-green-950/40 text-center">
+            <div className="text-xs text-green-700 dark:text-green-300">
+              Current Balance
+            </div>
+            <div
+              className={`text-lg font-bold mt-1 ${
                 customer.currentBalance > 0
-                  ? "text-red-600 dark:text-red-400"
+                  ? "text-green-900 dark:text-green-100"
                   : customer.currentBalance < 0
-                  ? "text-green-600 dark:text-green-400"
-                  : "text-gray-600 dark:text-gray-400"
-              }
+                  ? "text-green-700 dark:text-green-300"
+                  : "text-gray-900 dark:text-gray-100"
+              }`}
             >
               {customer.currentBalance.toLocaleString()}
-            </span>
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Credit Limit: {customer.creditLimit.toLocaleString()}
+            </div>
           </div>
         </div>
       </div>
