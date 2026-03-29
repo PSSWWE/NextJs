@@ -305,7 +305,7 @@ export async function GET() {
       color: getStatusColor(status.deliveryStatus || "Pending")
     }));
     
-    // Get revenue by destination with shipments - get top 12 countries with both shipments and revenue
+    // Get revenue by destination with shipments - all countries
     const allDestinationsForRevenue = await prisma.shipment.groupBy({
       by: ['destination'],
       _count: {
@@ -313,11 +313,9 @@ export async function GET() {
       }
     });
     
-    // Filter out null/empty destinations and get top 12 by shipment count
     const topDestinationsForRevenue = allDestinationsForRevenue
       .filter(dest => dest.destination && dest.destination.trim() !== "")
-      .sort((a, b) => b._count.id - a._count.id)
-      .slice(0, 12);
+      .sort((a, b) => b._count.id - a._count.id);
     
     // Calculate revenue for each destination using shipment-invoice relationship
     const revenueByDestinationWithRevenue = await Promise.all(
@@ -361,10 +359,8 @@ export async function GET() {
       })
     );
     
-    // Sort by revenue descending to show top revenue countries
     const transformedRevenueByDestination = revenueByDestinationWithRevenue
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 12);
+      .sort((a, b) => b.revenue - a.revenue);
     
     // Get monthly shipments count for last 12 months (using shipmentDate)
     const monthlyShipments = [];

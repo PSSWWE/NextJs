@@ -17,6 +17,8 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
+  Maximize2,
+  X,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -88,6 +90,7 @@ const DashboardPage = () => {
   const [showReceivableModal, setShowReceivableModal] = useState(false);
   const [showCustomersModal, setShowCustomersModal] = useState(false);
   const [selectedCountryIso, setSelectedCountryIso] = useState<string | null>(null);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
   const [data, setData] = useState({
     totalShipments: 0,
     totalUsers: 0,
@@ -391,13 +394,13 @@ const DashboardPage = () => {
 
 
         {/* Additional Charts */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 md:gap-8 mb-6 md:mb-8">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 md:gap-8 mb-6 md:mb-8 items-stretch">
           {/* Monthly Shipments vs Revenue */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col"
           >
             <div className="flex items-center justify-between mb-4 sm:mb-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-white">
@@ -405,32 +408,34 @@ const DashboardPage = () => {
               </h3>
               <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
             </div>
-            <ResponsiveContainer width="100%" height={340} className="sm:h-[380px]">
-              <BarChart data={data.monthlyShipments} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
-                <XAxis
-                  dataKey="month"
-                  stroke="#6B7280"
-                  fontSize={12}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis yAxisId="left" stroke="#6B7280" fontSize={12} />
-                <YAxis yAxisId="right" orientation="right" stroke="#6B7280" fontSize={12} />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#1F2937', 
-                    border: 'none', 
-                    borderRadius: '8px',
-                    color: '#F9FAFB',
-                    fontSize: '12px'
-                  }}
-                />
-                <Bar yAxisId="left" dataKey="shipments" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={3} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="flex-1 min-h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.monthlyShipments} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
+                  <XAxis
+                    dataKey="month"
+                    stroke="#6B7280"
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
+                  />
+                  <YAxis yAxisId="left" stroke="#6B7280" fontSize={12} />
+                  <YAxis yAxisId="right" orientation="right" stroke="#6B7280" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1F2937', 
+                      border: 'none', 
+                      borderRadius: '8px',
+                      color: '#F9FAFB',
+                      fontSize: '12px'
+                    }}
+                  />
+                  <Bar yAxisId="left" dataKey="shipments" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10B981" strokeWidth={3} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </motion.div>
 
           {/* Shipments and Revenue by Country */}
@@ -438,7 +443,7 @@ const DashboardPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col"
           >
             <div className="flex items-center justify-between mb-4 sm:mb-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-white">
@@ -450,48 +455,12 @@ const DashboardPage = () => {
               <div className="space-y-3">
                 <CountryRevenueMap
                   data={data.revenueByDestination
-                    .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                    .slice(0, 20)}
+                    .filter(d => d.destination && d.destination !== "No Data")}
                   onHoverCountry={setSelectedCountryIso}
                   onClickCountry={(info) => setSelectedCountryIso(info?.iso || null)}
+                  onFullscreen={() => setMapFullscreen(true)}
                 />
 
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <div className="text-gray-600 dark:text-gray-300 font-medium">
-                    {(() => {
-                      const base = data.revenueByDestination
-                        .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0);
-                      if (base.length === 0) return "Hover a country";
-                      const code = selectedCountryIso || base[0].destination;
-                      return getCountryNameFromCode(code) || code;
-                    })()}
-                  </div>
-                  <div className="text-gray-500 dark:text-gray-400">
-                    Revenue share view
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {data.revenueByDestination
-                    .filter(d => d.destination && d.destination !== "No Data" && d.revenue > 0)
-                    .sort((a, b) => b.revenue - a.revenue)
-                    .slice(0, 6)
-                    .map((entry, index) => (
-                      <div
-                        key={`${entry.destination}-${index}`}
-                        className="flex items-center justify-between rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs sm:text-sm"
-                        onMouseEnter={() => setSelectedCountryIso(entry.destination)}
-                        onMouseLeave={() => setSelectedCountryIso(null)}
-                      >
-                        <span className="font-medium text-gray-700 dark:text-gray-200">
-                          {getCountryNameFromCode(entry.destination) || entry.destination}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-400">
-                          {entry.revenue.toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                </div>
               </div>
             ) : (
               <div className="h-[250px] flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -504,6 +473,31 @@ const DashboardPage = () => {
             )}
           </motion.div>
         </div>
+
+        {/* Fullscreen Map Modal */}
+        {mapFullscreen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-8">
+            <div className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+                  Shipments and Revenue by Country
+                </h3>
+                <button
+                  onClick={() => setMapFullscreen(false)}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+              <CountryRevenueMap
+                data={data.revenueByDestination
+                  .filter(d => d.destination && d.destination !== "No Data")}
+                onHoverCountry={setSelectedCountryIso}
+                onClickCountry={(info) => setSelectedCountryIso(info?.iso || null)}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Top Customers Chart */}
         <div className="mb-6 md:mb-8">

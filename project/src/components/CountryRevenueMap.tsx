@@ -23,6 +23,7 @@ type Props = {
   data: RevenueItem[];
   onHoverCountry?: (isoCode: string | null) => void;
   onClickCountry?: (info: CountryInfo | null) => void;
+  onFullscreen?: () => void;
 };
 
 type CountryFeature = Feature<Geometry, { name: string }> & { id?: string };
@@ -76,18 +77,20 @@ function colorForRatio(ratio: number): string {
   return "#e5e7eb";
 }
 
+const ANTARCTICA_ID = "010";
+
 const BASE_WIDTH = 960;
-const BASE_HEIGHT = 500;
+const BASE_HEIGHT = 460;
 const MIN_ZOOM = 1;
-const MAX_ZOOM = 6;
+const MAX_ZOOM = 8;
 
 const baseProjection = geoNaturalEarth1()
-  .scale(160)
-  .translate([BASE_WIDTH / 2, BASE_HEIGHT / 2]);
+  .scale(185)
+  .translate([BASE_WIDTH / 2 - 35, BASE_HEIGHT / 2 + 35]);
 
 const basePath = geoPath().projection(baseProjection);
 
-export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry }: Props) {
+export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry, onFullscreen }: Props) {
   const [features, setFeatures] = useState<CountryFeature[]>([]);
   const [tooltip, setTooltip] = useState<{
     x: number;
@@ -109,7 +112,9 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
       .then((topo: Topology) => {
         const geom = topo.objects.countries as GeometryCollection;
         const fc = feature(topo, geom) as unknown as FeatureCollection<Geometry, { name: string }>;
-        setFeatures(fc.features as CountryFeature[]);
+        setFeatures(
+          (fc.features as CountryFeature[]).filter((f) => f.id !== ANTARCTICA_ID)
+        );
       })
       .catch(() => {});
   }, []);
@@ -118,7 +123,7 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
     const out: Record<string, { revenue: number; shipments: number }> = {};
     data.forEach((d) => {
       const iso = (d.destination || "").trim().toUpperCase();
-      if (iso && d.revenue > 0) {
+      if (iso && (d.revenue > 0 || d.shipments > 0)) {
         const prev = out[iso] || { revenue: 0, shipments: 0 };
         out[iso] = {
           revenue: prev.revenue + d.revenue,
@@ -170,7 +175,7 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
 
   if (features.length === 0) {
     return (
-      <div className="h-[300px] flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+      <div className="h-[400px] flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
         Loading map...
       </div>
     );
@@ -193,7 +198,7 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
         <svg
           viewBox={`0 0 ${BASE_WIDTH} ${BASE_HEIGHT}`}
           className="w-full h-auto"
-          style={{ maxHeight: 400 }}
+          style={{ maxHeight: 460 }}
         >
           <g transform={`translate(${tx}, ${ty}) scale(${zoom}) translate(${-BASE_WIDTH / 2}, ${-BASE_HEIGHT / 2})`}>
             {features.map((f) => {
@@ -307,6 +312,20 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
             <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966a.25.25 0 0 1 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
           </svg>
         </button>
+        {onFullscreen && (
+          <button
+            onClick={onFullscreen}
+            className="w-7 h-7 flex items-center justify-center rounded bg-white dark:bg-slate-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors"
+            title="Fullscreen"
+          >
+            <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="10 2 14 2 14 6" />
+              <polyline points="6 14 2 14 2 10" />
+              <line x1="14" y1="2" x2="9.5" y2="6.5" />
+              <line x1="2" y1="14" x2="6.5" y2="9.5" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Selected country info panel */}
@@ -379,11 +398,11 @@ export default function CountryRevenueMap({ data, onHoverCountry, onClickCountry
       )}
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-2 mt-2 text-[10px] text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center gap-2 mt-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
         <span>Low</span>
-        <div className="flex h-2 rounded overflow-hidden">
+        <div className="flex h-2.5 rounded overflow-hidden">
           {PALETTE.map((c) => (
-            <div key={c} className="w-5" style={{ background: c }} />
+            <div key={c} className="w-10" style={{ background: c }} />
           ))}
         </div>
         <span>High revenue</span>
